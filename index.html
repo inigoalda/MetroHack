@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MetroHack</title>
+    <link rel="icon" type="image/png" href="icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="panel panel-left">
+        <header class="panel-title-wrap">
+          <div class="logo-row"><img src="icon.png" alt="MetroHack logo" class="app-logo" /><p class="eyebrow">MetroHack</p></div>
+          <h1>Metro Map Builder</h1>
+          <p class="subtitle">
+            Build workstreams, milestones, and deliverables like a metro network.
+          </p>
+        </header>
+
+        <section class="panel-group">
+          <h2>Tools</h2>
+          <div class="toolbar-grid" id="toolButtons">
+            <button data-tool="select" class="active">Select</button>
+            <button data-tool="add-stream">Add Stream</button>
+            <button data-tool="add-activity">Add Activity</button>
+            <button data-tool="add-deliverable">Add Deliverable</button>
+            <button data-tool="connect">Connect Stops</button>
+            <button data-tool="add-text-label">Add Text Label</button>
+            <button id="deleteSelected" class="danger">Delete Selected</button>
+          </div>
+          <p class="hint" id="toolHint"></p>
+        </section>
+
+        <section class="panel-group">
+          <h2>Stream Setup</h2>
+          <label>
+            Use Existing Stream
+            <select id="streamPreset">
+              <option value="__new__">— New Stream —</option>
+            </select>
+          </label>
+          <label>
+            Stream Name
+            <input id="newStreamName" type="text" placeholder="Enter stream name" value="" />
+          </label>
+          <label>Stream Color</label>
+          <div class="color-picker-row" id="colorPalette">
+            <input id="newStreamColor" type="color" value="#86BC25" />
+            <span class="color-hex" id="colorHex">#86BC25</span>
+          </div>
+          <p class="hint" id="streamSetupHint"></p>
+        </section>
+
+        <section class="panel-group">
+          <h2>Selected Item</h2>
+          <div id="selectionEditor" class="selection-editor muted">Nothing selected.</div>
+        </section>
+
+        <section class="panel-group">
+          <h2>Save / Load</h2>
+          <div class="export-actions">
+            <button id="saveMap">Save Map</button>
+            <button id="loadMap">Load Map</button>
+            <input type="file" id="loadMapFile" accept=".json" hidden />
+          </div>
+        </section>
+
+        <section class="panel-group">
+          <h2>Display</h2>
+          <label class="range-label">Label Font Size <span id="labelFontSizeValue">14px</span>
+            <input id="labelFontSize" type="range" min="8" max="28" step="1" value="14" />
+          </label>
+        </section>
+
+        <section class="panel-group">
+          <h2>Export Diagram</h2>
+          <div class="export-actions">
+            <button id="exportPng">Export PNG</button>
+            <button id="exportSvg">Export SVG</button>
+          </div>
+          <h2 style="margin-top:10px">Export Legend</h2>
+          <div class="export-actions">
+            <button id="exportLegendPng">Legend PNG</button>
+            <button id="exportLegendSvg">Legend SVG</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <div class="workspace-header">
+          <p>Click-drag anywhere to pan, wheel to zoom, and drag to create on snap grid.</p>
+          <div class="header-actions">
+            <div id="themeToggle" class="theme-toggle" title="Toggle light/dark mode">
+              <svg class="theme-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <div class="theme-toggle-track">
+                <div class="theme-toggle-thumb"></div>
+              </div>
+              <svg class="theme-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </div>
+            <div class="header-separator"></div>
+            <button id="undoBtn">Undo</button>
+            <button id="redoBtn">Redo</button>
+            <button id="fitToView">Fit to View</button>
+            <button id="goToToday">Today</button>
+            <button id="toggleGrid" class="active">Grid</button>
+            <button id="toggleSnap" class="active">Snap</button>
+          </div>
+        </div>
+
+        <div id="canvasWrap" class="canvas-wrap">
+          <div id="calendarBar" class="calendar-bar"></div>
+          <svg id="metroCanvas" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.8" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <pattern id="gridPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
+              </pattern>
+            </defs>
+            <rect class="canvas-bg" x="-5000" y="-5000" width="16000" height="16000"></rect>
+            <rect class="canvas-grid" x="-5000" y="-5000" width="16000" height="16000" fill="url(#gridPattern)"></rect>
+            <g id="viewport">
+              <g id="calendarGuidesLayer"></g>
+              <g id="guidesLayer"></g>
+              <g id="connectionsLayer"></g>
+              <g id="streamsLayer"></g>
+              <g id="nodesLayer"></g>
+              <g id="handlesLayer"></g>
+              <g id="labelsLayer"></g>
+              <g id="previewLayer"></g>
+            </g>
+          </svg>
+
+          <div class="legend-card">
+            <h3>Legend</h3>
+            <p class="legend-title">Stop Status</p>
+            <ul>
+              <li><span class="dot planned"></span> Planned Activity</li>
+              <li><span class="dot completed"></span> Completed</li>
+              <li><span class="dot ongoing"></span> On-going</li>
+              <li><span class="dot attention"></span> Needs Attention</li>
+              <li><span class="diamond"></span> Deliverable</li>
+            </ul>
+            <p class="legend-title">Stream Colors</p>
+            <ul id="streamLegend"></ul>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="canvasContextMenu" class="context-menu" style="display:none">
+      <button data-action="add-guide-v">Add Vertical Guide</button>
+      <button data-action="add-guide-h">Add Horizontal Guide</button>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
