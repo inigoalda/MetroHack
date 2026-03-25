@@ -90,6 +90,7 @@ That's it. No `npm install`, no bundlers, no frameworks. Pure HTML + CSS + JavaS
 - **PNG Export** — High-resolution 2x rasterized output
 - **SVG Export** — Scalable vector export with embedded fonts
 - **Legend Export** — Separate legend graphic in PNG or SVG
+- **Interactive Viewer** — Export a single self-contained HTML file for read-only sharing. Includes smooth pan & zoom with easing, calendar months, legend, date tooltips on hover, Fit to View / Today buttons, and touch support. No dependencies — just send the file to a client and they can explore the map in any browser
 
 ### History
 - **Undo / Redo** — Full history stack (up to 120 snapshots), including calendar changes
@@ -124,8 +125,8 @@ That's it. No `npm install`, no bundlers, no frameworks. Pure HTML + CSS + JavaS
 ```
 MetroHack/
 ├── index.html      # App shell, toolbar, side panel
-├── app.js          # All application logic (~2800 lines)
-├── styles.css      # Light/dark theme, glassmorphism UI (~900 lines)
+├── app.js          # All application logic (~3900 lines)
+├── styles.css      # Light/dark theme, glassmorphism UI (~1000 lines)
 ├── icon.png        # Favicon / logo
 └── README.md
 ```
