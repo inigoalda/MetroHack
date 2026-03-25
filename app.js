@@ -3942,6 +3942,7 @@ function downloadBlob(blob, filename) {
 // --- Guides (context menu) ---
 
 let contextMenuPoint = null;
+let contextMenuNodeId = null;
 
 function showCanvasContextMenu(event) {
   event.preventDefault();
@@ -3950,10 +3951,44 @@ function showCanvasContextMenu(event) {
   canvasContextMenu.style.top = event.clientY + "px";
   contextMenuPoint = svgPointFromEvent(event);
 
+  // Clean up previous dynamic entries
+  canvasContextMenu.querySelectorAll("[data-action='delete-guide'], .ctx-separator, [data-action^='set-status-']").forEach((el) => el.remove());
+  contextMenuNodeId = null;
+
+  // If right-clicked on a node, add status change options
+  const nodeG = event.target.closest("g[data-node-id]");
+  if (nodeG) {
+    contextMenuNodeId = nodeG.dataset.nodeId;
+    const node = state.nodes.find((n) => n.id === contextMenuNodeId);
+    if (node) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-separator";
+      canvasContextMenu.appendChild(sep);
+
+      const statuses = [
+        { key: "planned", label: "Planned", color: STATUS_COLORS.planned },
+        { key: "completed", label: "Completed", color: STATUS_COLORS.completed },
+        { key: "ongoing", label: "On-going", color: STATUS_COLORS.ongoing },
+        { key: "attention", label: "Needs Attention", color: STATUS_COLORS.attention },
+      ];
+      statuses.forEach((s) => {
+        const btn = document.createElement("button");
+        btn.dataset.action = "set-status-" + s.key;
+        const dot = document.createElement("span");
+        dot.style.cssText = "display:inline-block;width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,0.25);margin-right:8px;vertical-align:middle;background:" + s.color + ";";
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(s.label));
+        if (node.status === s.key) {
+          btn.style.fontWeight = "700";
+          btn.style.borderLeft = "3px solid var(--accent)";
+        }
+        canvasContextMenu.appendChild(btn);
+      });
+    }
+  }
+
   // If right-clicked on a guide, add a delete option
   const guideHit = event.target.closest(".guide-hit");
-  const existingDelete = canvasContextMenu.querySelector("[data-action='delete-guide']");
-  if (existingDelete) existingDelete.remove();
 
   if (guideHit) {
     const delBtn = document.createElement("button");
@@ -4095,6 +4130,16 @@ function initEvents() {
     if (action === "add-guide-v") addGuide("v");
     else if (action === "add-guide-h") addGuide("h");
     else if (action === "delete-guide") deleteGuide(btn.dataset.guideId);
+    else if (action.startsWith("set-status-") && contextMenuNodeId) {
+      const newStatus = action.replace("set-status-", "");
+      const node = state.nodes.find((n) => n.id === contextMenuNodeId);
+      if (node && node.status !== newStatus) {
+        captureHistorySnapshot();
+        node.status = newStatus;
+        render();
+        renderSelectionEditor();
+      }
+    }
     hideCanvasContextMenu();
   });
 }

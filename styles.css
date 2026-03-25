@@ -866,6 +866,12 @@ button:disabled {
   background: var(--danger-btn-bg);
 }
 
+.ctx-separator {
+  height: 1px;
+  background: var(--line-faint);
+  margin: 3px 4px;
+}
+
 /* --- Label foreignObject wrapping --- */
 
 .label-fo {
