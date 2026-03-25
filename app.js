@@ -3339,6 +3339,15 @@ svg{width:100%;height:100%;display:block;}
   border-radius:8px;padding:6px 14px;font-family:"Space Grotesk",sans-serif;font-size:0.8rem;font-weight:500;
   cursor:pointer;transition:background 0.15s,border-color 0.15s;}
 .viewer-toolbar button:hover{background:var(--line-faint);border-color:var(--accent);}
+
+/* Minimap */
+.minimap{position:absolute;left:14px;bottom:14px;width:220px;height:140px;border-radius:12px;
+  border:1px solid var(--line-faint);background:var(--legend-bg);backdrop-filter:blur(8px);
+  z-index:4;overflow:hidden;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.12);}
+.minimap canvas{width:100%;height:100%;display:block;}
+.minimap-viewport{position:absolute;border:2px solid var(--accent);border-radius:2px;
+  background:rgba(0,120,212,0.08);pointer-events:none;transition:none;}
+[data-theme="dark"] .minimap-viewport{background:rgba(79,194,255,0.10);}
 </style>
 </head>
 <body>
@@ -3364,6 +3373,11 @@ svg{width:100%;height:100%;display:block;}
       <g id="labelsLayer"></g>
     </g>
   </svg>
+
+  <div class="minimap" id="minimap">
+    <canvas id="minimapCanvas"></canvas>
+    <div class="minimap-viewport" id="minimapViewport"></div>
+  </div>
 
   <div class="legend-card">
     <h3>Legend</h3>
@@ -3773,12 +3787,143 @@ function goToToday(){
   setTransformAnimated(800-todayX*animTarget.scale,animTarget.ty,animTarget.scale);
 }
 
+/* ── Minimap ────────────────────────────────────────── */
+var minimapEl=document.getElementById("minimap");
+var minimapCanvas=document.getElementById("minimapCanvas");
+var minimapVp=document.getElementById("minimapViewport");
+var mmCtx=minimapCanvas.getContext("2d");
+var contentBounds=null;
+
+function getContentBounds(){
+  var pts=[];
+  DATA.streams.forEach(function(s){s.points.forEach(function(p){pts.push(p);});});
+  DATA.nodes.forEach(function(n){pts.push({x:n.x,y:n.y});});
+  DATA.textLabels.forEach(function(tl){pts.push({x:tl.x,y:tl.y});});
+  if(pts.length===0)return{x:0,y:0,w:1600,h:1000};
+  var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  pts.forEach(function(p){if(p.x<minX)minX=p.x;if(p.y<minY)minY=p.y;if(p.x>maxX)maxX=p.x;if(p.y>maxY)maxY=p.y;});
+  var pad=80;
+  return{x:minX-pad,y:minY-pad,w:maxX-minX+pad*2,h:maxY-minY+pad*2};
+}
+
+function renderMinimap(){
+  var dpr=window.devicePixelRatio||1;
+  var cw=minimapEl.clientWidth;var ch=minimapEl.clientHeight;
+  minimapCanvas.width=cw*dpr;minimapCanvas.height=ch*dpr;
+  mmCtx.setTransform(dpr,0,0,dpr,0,0);
+  mmCtx.clearRect(0,0,cw,ch);
+  if(!contentBounds)return;
+  var b=contentBounds;
+  var scaleX=cw/b.w;var scaleY=ch/b.h;
+  var ms=Math.min(scaleX,scaleY)*0.9;
+  var ox=(cw-b.w*ms)/2;var oy=(ch-b.h*ms)/2;
+  function mx(x){return ox+(x-b.x)*ms;}
+  function my(y){return oy+(y-b.y)*ms;}
+
+  // Draw connections
+  mmCtx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--connection-stroke").trim()||"rgba(0,0,0,0.3)";
+  mmCtx.lineWidth=Math.max(0.3,ms*2);mmCtx.setLineDash([Math.max(1,ms*6),Math.max(1,ms*6)]);
+  DATA.connections.forEach(function(conn){
+    var a=DATA.nodes.find(function(n){return n.id===conn.fromNodeId;});
+    var b2=DATA.nodes.find(function(n){return n.id===conn.toNodeId;});
+    if(!a||!b2)return;
+    mmCtx.beginPath();mmCtx.moveTo(mx(a.x),my(a.y));mmCtx.lineTo(mx(b2.x),my(b2.y));mmCtx.stroke();
+  });
+  mmCtx.setLineDash([]);
+
+  // Draw streams
+  var sw=Math.max(1.5,Math.min(4,ms*16));
+  mmCtx.lineWidth=sw;mmCtx.lineCap="round";mmCtx.lineJoin="round";
+  DATA.streams.forEach(function(s){
+    if(s.points.length<2)return;
+    mmCtx.strokeStyle=s.color;mmCtx.beginPath();
+    mmCtx.moveTo(mx(s.points[0].x),my(s.points[0].y));
+    for(var i=1;i<s.points.length;i++) mmCtx.lineTo(mx(s.points[i].x),my(s.points[i].y));
+    mmCtx.stroke();
+  });
+
+  // Draw nodes
+  var nr=Math.max(1,Math.min(3,ms*10));
+  DATA.nodes.forEach(function(node){
+    var fill=STATUS_COLORS[node.status]||STATUS_COLORS.planned;
+    mmCtx.fillStyle=fill;mmCtx.strokeStyle="#53565A";mmCtx.lineWidth=Math.max(0.3,ms*1.5);
+    if(node.type==="activity"){
+      mmCtx.beginPath();mmCtx.arc(mx(node.x),my(node.y),nr,0,Math.PI*2);mmCtx.fill();mmCtx.stroke();
+    }else{
+      var px=mx(node.x);var py=my(node.y);
+      mmCtx.save();mmCtx.translate(px,py);mmCtx.rotate(Math.PI/4);
+      mmCtx.fillRect(-nr,-nr,nr*2,nr*2);mmCtx.strokeRect(-nr,-nr,nr*2,nr*2);
+      mmCtx.restore();
+    }
+  });
+}
+
+function updateMinimapViewport(){
+  if(!contentBounds)return;
+  var b=contentBounds;
+  var cw=minimapEl.clientWidth;var ch=minimapEl.clientHeight;
+  var scaleX=cw/b.w;var scaleY=ch/b.h;
+  var ms=Math.min(scaleX,scaleY)*0.9;
+  var ox=(cw-b.w*ms)/2;var oy=(ch-b.h*ms)/2;
+
+  // Compute visible world rect from current transform
+  // The SVG viewBox is 0..1600 x 0..1000, viewport transform is translate(tx,ty) scale(scale)
+  // Visible world x range: (0 - tx)/scale .. (1600 - tx)/scale
+  var vx0=(0-tx)/scale;var vy0=(0-ty)/scale;
+  var vx1=(1600-tx)/scale;var vy1=(1000-ty)/scale;
+
+  // Map to minimap pixels
+  var left=ox+(vx0-b.x)*ms;var top2=oy+(vy0-b.y)*ms;
+  var right=ox+(vx1-b.x)*ms;var bot=oy+(vy1-b.y)*ms;
+  var w=right-left;var h=bot-top2;
+
+  // Clamp to minimap bounds
+  minimapVp.style.left=Math.max(0,left)+"px";
+  minimapVp.style.top=Math.max(0,top2)+"px";
+  minimapVp.style.width=Math.min(w,cw-Math.max(0,left))+"px";
+  minimapVp.style.height=Math.min(h,ch-Math.max(0,top2))+"px";
+  minimapVp.style.display=(w<cw*0.95||h<ch*0.95)?"block":"none";
+}
+
+// Click/drag on minimap to navigate
+var mmDrag={active:false};
+function minimapNavigate(e){
+  var rect=minimapEl.getBoundingClientRect();
+  var mx2=e.clientX-rect.left;var my2=e.clientY-rect.top;
+  var b=contentBounds;if(!b)return;
+  var cw=minimapEl.clientWidth;var ch=minimapEl.clientHeight;
+  var scaleX=cw/b.w;var scaleY=ch/b.h;
+  var ms=Math.min(scaleX,scaleY)*0.9;
+  var ox=(cw-b.w*ms)/2;var oy=(ch-b.h*ms)/2;
+  // Convert minimap pixel to world coords
+  var worldX=b.x+(mx2-ox)/ms;
+  var worldY=b.y+(my2-oy)/ms;
+  // Center on that world point
+  var ntx=800-worldX*animTarget.scale;
+  var nty=500-worldY*animTarget.scale;
+  setTransformAnimated(ntx,nty,animTarget.scale);
+}
+minimapEl.addEventListener("mousedown",function(e){
+  e.preventDefault();e.stopPropagation();
+  mmDrag.active=true;minimapNavigate(e);
+});
+window.addEventListener("mousemove",function(e){
+  if(mmDrag.active){e.preventDefault();minimapNavigate(e);}
+});
+window.addEventListener("mouseup",function(){mmDrag.active=false;});
+
+// Hook into transform updates
+var _origApply=applyTransform;
+applyTransform=function(){_origApply();updateMinimapViewport();};
+
 /* ── Init ──────────────────────────────────────────── */
+contentBounds=getContentBounds();
 renderStreams();renderConnections();renderNodes();renderLabels();renderLegend();
+renderMinimap();
 fitToView();
 document.getElementById("fitViewBtn").addEventListener("click",fitToView);
 document.getElementById("todayBtn").addEventListener("click",goToToday);
-window.addEventListener("resize",function(){renderCalendar();});
+window.addEventListener("resize",function(){renderCalendar();renderMinimap();updateMinimapViewport();});
 })();
 <\/script>
 </body>
