@@ -140,12 +140,12 @@
             <rect class="canvas-grid" x="-5000" y="-5000" width="16000" height="16000" fill="url(#gridPattern)"></rect>
             <g id="viewport">
               <g id="calendarGuidesLayer"></g>
-              <g id="guidesLayer"></g>
               <g id="connectionsLayer"></g>
               <g id="streamsLayer"></g>
               <g id="nodesLayer"></g>
-              <g id="handlesLayer"></g>
               <g id="labelsLayer"></g>
+              <g id="guidesLayer"></g>
+              <g id="handlesLayer"></g>
               <g id="previewLayer"></g>
             </g>
           </svg>
@@ -168,8 +168,8 @@
     </div>
 
     <div id="canvasContextMenu" class="context-menu" style="display:none">
-      <button data-action="add-guide-v">Add Vertical Guide</button>
-      <button data-action="add-guide-h">Add Horizontal Guide</button>
+      <button data-action="add-guide-v"><span class="ctx-icon">│</span>Add Vertical Guide</button>
+      <button data-action="add-guide-h"><span class="ctx-icon">─</span>Add Horizontal Guide</button>
     </div>
     <script src="app.js"></script>
   </body>

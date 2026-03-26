@@ -851,7 +851,8 @@ button:disabled {
 }
 
 .context-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
   padding: 7px 12px;
@@ -882,6 +883,89 @@ button:disabled {
   height: 1px;
   background: var(--line-faint);
   margin: 3px 4px;
+}
+
+.ctx-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  margin-right: 8px;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.ctx-submenu-wrap {
+  position: relative;
+}
+
+.ctx-submenu-trigger {
+  display: flex !important;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  color: var(--ctx-menu-text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ctx-submenu-trigger:hover {
+  background: var(--ctx-menu-hover);
+  color: var(--text-strong);
+}
+
+.ctx-arrow {
+  margin-left: auto;
+  font-size: 1rem;
+  opacity: 0.5;
+}
+
+.ctx-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -6px;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--ctx-menu-bg);
+  border: 1px solid var(--ctx-menu-border);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
+}
+
+.ctx-submenu-wrap:hover > .ctx-submenu {
+  display: grid;
+  gap: 2px;
+}
+
+.ctx-submenu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  color: var(--ctx-menu-text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-submenu button:hover {
+  background: var(--ctx-menu-hover);
+  color: var(--text-strong);
 }
 
 /* --- Label foreignObject wrapping --- */

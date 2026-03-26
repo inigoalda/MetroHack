@@ -2937,6 +2937,36 @@ function finishInteraction() {
   render();
 }
 
+function arrangeElement(type, id, action) {
+  let arr;
+  if (type === "stream") arr = state.streams;
+  else if (type === "connection") arr = state.connections;
+  else return;
+
+  const idx = arr.findIndex((el) => el.id === id);
+  if (idx === -1) return;
+
+  captureHistorySnapshot();
+
+  if (action === "bring-to-front") {
+    const item = arr.splice(idx, 1)[0];
+    arr.push(item);
+  } else if (action === "send-to-back") {
+    const item = arr.splice(idx, 1)[0];
+    arr.unshift(item);
+  } else if (action === "bring-forward") {
+    if (idx < arr.length - 1) {
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+    }
+  } else if (action === "send-backward") {
+    if (idx > 0) {
+      [arr[idx], arr[idx - 1]] = [arr[idx - 1], arr[idx]];
+    }
+  }
+
+  render();
+}
+
 function removeSelected() {
   if (state.selected.length === 0) return;
 
@@ -4376,9 +4406,10 @@ function showCanvasContextMenu(event) {
   contextMenuPoint = svgPointFromEvent(event);
 
   // Clean up previous dynamic entries
-  canvasContextMenu.querySelectorAll("[data-action='delete-guide'], [data-action='delete-element'], .ctx-separator, [data-action^='set-status-']").forEach((el) => el.remove());
+  canvasContextMenu.querySelectorAll("[data-action='delete-guide'], [data-action='delete-element'], .ctx-separator, [data-action^='set-status-'], .ctx-submenu-wrap, [data-action^='arrange-']").forEach((el) => el.remove());
   contextMenuNodeId = null;
   canvasContextMenu._deleteTarget = null;
+  canvasContextMenu._arrangeTarget = null;
 
   // Detect what element was right-clicked
   const nodeG = event.target.closest("g[data-node-id]");
@@ -4444,6 +4475,44 @@ function showCanvasContextMenu(event) {
     deleteLabel = "Delete Guide";
   }
 
+  // Arrange submenu for streams and connections
+  if (streamLine || connEl) {
+    const arrangeType = streamLine ? "stream" : "connection";
+    const arrangeId = streamLine ? streamLine.dataset.streamId : connEl.dataset.connectionId;
+    canvasContextMenu._arrangeTarget = { type: arrangeType, id: arrangeId };
+
+    const sep = document.createElement("div");
+    sep.className = "ctx-separator";
+    canvasContextMenu.appendChild(sep);
+
+    const wrap = document.createElement("div");
+    wrap.className = "ctx-submenu-wrap";
+
+    const trigger = document.createElement("button");
+    trigger.className = "ctx-submenu-trigger";
+    trigger.innerHTML = `<span class="ctx-icon">⇅</span>Arrange<span class="ctx-arrow">›</span>`;
+    wrap.appendChild(trigger);
+
+    const sub = document.createElement("div");
+    sub.className = "ctx-submenu";
+
+    const items = [
+      { action: "arrange-bring-to-front", icon: "⤒", label: "Bring to Front" },
+      { action: "arrange-bring-forward", icon: "↑", label: "Bring Forward" },
+      { action: "arrange-send-backward", icon: "↓", label: "Send Backward" },
+      { action: "arrange-send-to-back", icon: "⤓", label: "Send to Back" },
+    ];
+    items.forEach((item) => {
+      const btn = document.createElement("button");
+      btn.dataset.action = item.action;
+      btn.innerHTML = `<span class="ctx-icon">${item.icon}</span>${item.label}`;
+      sub.appendChild(btn);
+    });
+
+    wrap.appendChild(sub);
+    canvasContextMenu.appendChild(wrap);
+  }
+
   if (deleteLabel) {
     const sep = document.createElement("div");
     sep.className = "ctx-separator";
@@ -4451,7 +4520,7 @@ function showCanvasContextMenu(event) {
 
     const delBtn = document.createElement("button");
     delBtn.dataset.action = "delete-element";
-    delBtn.textContent = deleteLabel;
+    delBtn.innerHTML = `<span class="ctx-icon">&#xd7;</span>${deleteLabel}`;
     delBtn.className = "danger";
     canvasContextMenu.appendChild(delBtn);
   }
@@ -4656,6 +4725,11 @@ function initEvents() {
         render();
         renderSelectionEditor();
       }
+    }
+    else if (action.startsWith("arrange-") && canvasContextMenu._arrangeTarget) {
+      const target = canvasContextMenu._arrangeTarget;
+      const arrangeAction = action.replace("arrange-", "");
+      arrangeElement(target.type, target.id, arrangeAction);
     }
     hideCanvasContextMenu();
   });
