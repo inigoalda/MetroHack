@@ -1887,10 +1887,13 @@ function renderSelectionEditor() {
             <button class="pos-btn${lbl.descPosition === "right" || !lbl.descPosition ? " active" : ""}" data-label-idx="${i}" data-pos="right">Right</button>
           </div>
         </div>
-        <div class="sub-label-color-row">
-          <label class="sub-label-color-field">Text <input type="color" class="label-text-color" value="${lbl.textColor}" data-label-idx="${i}" /></label>
-          <label class="sub-label-color-field">Bg <input type="color" class="label-bg-color" value="${lbl.bgColor || (isDeliverable ? "#000000" : "#ffffff")}" data-label-idx="${i}" ${hasBg ? "" : "disabled"} /></label>
-          <button class="label-bg-toggle toggle-btn${hasBg ? " active" : ""}" data-label-idx="${i}">${hasBg ? "On" : "Off"}</button>
+        <div class="sub-label-color-section">
+          <span class="sub-label-color-heading">Primary Color</span>
+          <input type="color" class="label-text-color sub-label-color-input" value="${lbl.textColor}" data-label-idx="${i}" />
+        </div>
+        <div class="sub-label-color-section">
+          <span class="sub-label-color-heading">Secondary Color <button type="button" class="label-bg-toggle" data-label-idx="${i}" title="${hasBg ? "Disable" : "Enable"}"><span class="bg-toggle-track${hasBg ? " on" : ""}"><span class="bg-toggle-thumb"></span></span></button></span>
+          <input type="color" class="label-bg-color sub-label-color-input${hasBg ? "" : " color-disabled"}" value="${lbl.bgColor || (isDeliverable ? "#000000" : "#ffffff")}" data-label-idx="${i}" ${hasBg ? "" : "disabled"} />
         </div>
       </div>`;
     }).join("");
@@ -1919,10 +1922,13 @@ function renderSelectionEditor() {
       <input id="editNodeMaxWidth" type="range" min="40" max="400" step="10" value="${nodeMaxW}" />
     </label>
     ${isDeliverable ? "" : `
-    <label>Text Color <input id="editNodeTextColor" type="color" value="${getNodeLabelStyle(node).textColor}" /></label>
-    <div class="editor-row">
-      <label class="editor-row-field">Background <input id="editNodeLabelBgColor" type="color" value="${(getNodeLabelStyle(node).bgColor || "#ffffff")}" ${getNodeLabelStyle(node).bgColor ? "" : "disabled"} /></label>
-      <button id="editNodeLabelBgEnabled" class="toggle-btn${getNodeLabelStyle(node).bgColor ? " active" : ""}">${getNodeLabelStyle(node).bgColor ? "On" : "Off"}</button>
+    <div class="sub-label-color-section">
+      <span class="sub-label-color-heading">Primary Color</span>
+      <input id="editNodeTextColor" type="color" class="sub-label-color-input" value="${getNodeLabelStyle(node).textColor}" />
+    </div>
+    <div class="sub-label-color-section">
+      <span class="sub-label-color-heading">Secondary Color <button type="button" id="editNodeLabelBgEnabled" class="label-bg-toggle" title="${getNodeLabelStyle(node).bgColor ? "Disable" : "Enable"}"><span class="bg-toggle-track${getNodeLabelStyle(node).bgColor ? " on" : ""}"><span class="bg-toggle-thumb"></span></span></button></span>
+      <input id="editNodeLabelBgColor" type="color" class="sub-label-color-input${getNodeLabelStyle(node).bgColor ? "" : " color-disabled"}" value="${(getNodeLabelStyle(node).bgColor || "#ffffff")}" ${getNodeLabelStyle(node).bgColor ? "" : "disabled"} />
     </div>`}
     <label>Status
       <select id="editNodeStatus">
