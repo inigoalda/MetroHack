@@ -118,10 +118,32 @@
             <button id="toggleGrid" class="active">Grid</button>
             <button id="toggleSnap" class="active">Snap</button>
             <button id="toggleCalendar" class="active">Calendar</button>
+            <div class="header-separator"></div>
+            <button id="openFindBtn" title="Find & Replace (Ctrl+F)">&#x1F50D; Find</button>
           </div>
         </div>
 
         <div id="canvasWrap" class="canvas-wrap">
+          <div id="findBar" class="find-bar hidden">
+            <div class="find-row">
+              <div class="find-input-wrap">
+                <svg class="find-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input id="findInput" type="text" placeholder="Find" spellcheck="false" />
+              </div>
+              <span id="findCount" class="find-count">No results</span>
+              <button id="findPrev" class="find-nav" title="Previous (Shift+Enter)">&#x2191;</button>
+              <button id="findNext" class="find-nav" title="Next (Enter)">&#x2193;</button>
+              <button id="findToggleReplace" class="find-nav find-expand" title="Toggle Replace">&#x25B8;</button>
+              <button id="findClose" class="find-nav" title="Close (Escape)">&times;</button>
+            </div>
+            <div id="replaceRow" class="find-row replace-row hidden">
+              <div class="find-input-wrap">
+                <input id="replaceInput" type="text" placeholder="Replace" spellcheck="false" />
+              </div>
+              <button id="replaceOne" class="find-nav" title="Replace">Replace</button>
+              <button id="replaceAll" class="find-nav" title="Replace All">All</button>
+            </div>
+          </div>
           <div id="calendarBar" class="calendar-bar"></div>
           <svg id="metroCanvas" viewBox="0 0 1600 1000" xmlns="http://www.w3.org/2000/svg">
             <defs>

@@ -1484,6 +1484,12 @@ function renderLabels() {
       });
     }
 
+    // Tag each label FO with data attributes for find/highlight
+    labelEntries.forEach((entry, idx) => {
+      entry.fo.dataset.nodeId = node.id;
+      entry.fo.dataset.labelIdx = idx;
+    });
+
     // Background rectangles
     labelEntries.forEach((entry) => {
       if (!entry.bgColor) return;
@@ -1500,11 +1506,14 @@ function renderLabels() {
     });
 
     // Render description text based on descPosition per label
-    labelEntries.forEach((entry) => {
+    labelEntries.forEach((entry, idx) => {
       if (!entry.rightText) return;
       const dp = entry.descPosition || "right";
       const rfo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
       rfo.setAttribute("class", "label-fo");
+      rfo.dataset.nodeId = node.id;
+      rfo.dataset.labelIdx = idx;
+      rfo.dataset.desc = "1";
       const rdiv = document.createElement("div");
       rdiv.className = "label-wrap label-deliverable label-right-text";
 
@@ -4734,6 +4743,293 @@ function initEvents() {
     hideCanvasContextMenu();
   });
 }
+
+// ─── Find & Replace ───────────────────────────────────────
+
+const findBar = document.getElementById("findBar");
+const findInput = document.getElementById("findInput");
+const findCount = document.getElementById("findCount");
+const findPrevBtn = document.getElementById("findPrev");
+const findNextBtn = document.getElementById("findNext");
+const findCloseBtn = document.getElementById("findClose");
+const findToggleReplaceBtn = document.getElementById("findToggleReplace");
+const replaceRow = document.getElementById("replaceRow");
+const replaceInput = document.getElementById("replaceInput");
+const replaceOneBtn = document.getElementById("replaceOne");
+const replaceAllBtn = document.getElementById("replaceAll");
+
+let findResults = [];
+let findIndex = -1;
+let findHighlightEls = [];
+
+function collectSearchableItems() {
+  const items = [];
+  // Activities and deliverables
+  state.nodes.forEach((node) => {
+    if (node.type === "deliverable") {
+      // Main label
+      if (node.label) {
+        items.push({ type: "node", id: node.id, field: "label", text: node.label, x: node.x, y: node.y, labelIdx: 0, isDesc: false });
+      }
+      // Sub-labels
+      (node.subLabels || []).forEach((sl, i) => {
+        const lbl = typeof sl === "string" ? sl : sl.text;
+        if (lbl) items.push({ type: "node", id: node.id, field: `subLabel-${i}-text`, text: lbl, x: node.x, y: node.y, labelIdx: i + 1, isDesc: false });
+        const rt = typeof sl === "string" ? "" : (sl.rightText || "");
+        if (rt) items.push({ type: "node", id: node.id, field: `subLabel-${i}-rightText`, text: rt, x: node.x, y: node.y, labelIdx: i + 1, isDesc: true });
+      });
+      // Description
+      if (node.labelDescription) {
+        items.push({ type: "node", id: node.id, field: "labelDescription", text: node.labelDescription, x: node.x, y: node.y, labelIdx: 0, isDesc: true });
+      }
+    } else {
+      // Activity
+      if (node.label) {
+        items.push({ type: "node", id: node.id, field: "label", text: node.label, x: node.x, y: node.y, labelIdx: 0, isDesc: false });
+      }
+    }
+  });
+  // Text labels
+  state.textLabels.forEach((tl) => {
+    if (tl.text) {
+      items.push({ type: "text-label", id: tl.id, field: "text", text: tl.text, x: tl.x, y: tl.y });
+    }
+  });
+  return items;
+}
+
+function performFind() {
+  const query = findInput.value.trim().toLowerCase();
+  findResults = [];
+  findIndex = -1;
+  clearFindHighlight();
+
+  if (!query) {
+    findCount.textContent = "No results";
+    return;
+  }
+
+  const items = collectSearchableItems();
+  items.forEach((item) => {
+    if (item.text.toLowerCase().includes(query)) {
+      findResults.push(item);
+    }
+  });
+
+  if (findResults.length === 0) {
+    findCount.textContent = "No results";
+    return;
+  }
+
+  findIndex = 0;
+  goToFindResult();
+}
+
+function goToFindResult() {
+  if (findResults.length === 0) return;
+  findIndex = ((findIndex % findResults.length) + findResults.length) % findResults.length;
+  findCount.textContent = `${findIndex + 1} of ${findResults.length}`;
+
+  const result = findResults[findIndex];
+
+  if (result.type === "node") {
+    selectItem("node", result.id);
+  } else if (result.type === "text-label") {
+    selectItem("text-label", result.id);
+  }
+
+  showFindHighlight(result);
+
+  const targetScale = Math.max(state.transform.scale, 0.8);
+  state.transform.scale = targetScale;
+  state.transform.x = 800 - result.x * targetScale;
+  state.transform.y = 500 - result.y * targetScale;
+  applyViewportTransform();
+  renderCalendar();
+}
+
+function showFindHighlight(result) {
+  clearFindHighlight();
+  const query = findInput.value.trim();
+  if (!query) return;
+
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escapedQuery})`, "gi");
+
+  let targetDiv = null;
+
+  if (result.type === "node") {
+    const selector = result.isDesc
+      ? `foreignObject[data-node-id="${result.id}"][data-label-idx="${result.labelIdx}"][data-desc="1"]`
+      : `foreignObject[data-node-id="${result.id}"][data-label-idx="${result.labelIdx}"]:not([data-desc])`;
+    const fo = labelsLayer.querySelector(selector);
+    if (fo) {
+      targetDiv = fo.querySelector(".label-wrap, .label-right-text");
+    }
+  } else if (result.type === "text-label") {
+    const g = labelsLayer.querySelector(`g[data-text-label-id="${result.id}"]`);
+    if (g) {
+      targetDiv = g.querySelector(".text-label-content");
+    }
+  }
+
+  if (targetDiv) {
+    const original = targetDiv.textContent;
+    targetDiv.dataset.findOriginal = original;
+    targetDiv.innerHTML = escapeHtml(original).replace(regex, '<mark class="find-match">$1</mark>');
+    findHighlightEls = [targetDiv];
+  }
+}
+
+function clearFindHighlight() {
+  if (findHighlightEls && findHighlightEls.length > 0) {
+    findHighlightEls.forEach((div) => {
+      if (div.dataset.findOriginal != null) {
+        div.textContent = div.dataset.findOriginal;
+        delete div.dataset.findOriginal;
+      }
+    });
+    findHighlightEls = [];
+  }
+}
+
+function findNext() {
+  if (findResults.length === 0) return;
+  findIndex++;
+  goToFindResult();
+}
+
+function findPrev() {
+  if (findResults.length === 0) return;
+  findIndex--;
+  goToFindResult();
+}
+
+function openFindBar() {
+  findBar.classList.remove("hidden");
+  findInput.focus();
+  findInput.select();
+}
+
+function closeFindBar() {
+  findBar.classList.add("hidden");
+  clearFindHighlight();
+  findResults = [];
+  findIndex = -1;
+  findCount.textContent = "No results";
+  findInput.value = "";
+  replaceInput.value = "";
+  replaceRow.classList.add("hidden");
+  findToggleReplaceBtn.classList.remove("expanded");
+}
+
+function replaceCurrentResult() {
+  if (findResults.length === 0 || findIndex < 0) return;
+  const result = findResults[findIndex];
+  const query = findInput.value.trim();
+  const replacement = replaceInput.value;
+  if (!query) return;
+
+  captureHistorySnapshot();
+  applyReplacement(result, query, replacement);
+  render();
+  renderSelectionEditor();
+  performFind();
+  // Try to stay near same index
+  if (findIndex >= findResults.length) findIndex = findResults.length - 1;
+  if (findResults.length > 0) goToFindResult();
+}
+
+function replaceAllResults() {
+  if (findResults.length === 0) return;
+  const query = findInput.value.trim();
+  const replacement = replaceInput.value;
+  if (!query) return;
+
+  captureHistorySnapshot();
+  // Replace all at once (iterate backwards to avoid index shifts)
+  findResults.forEach((result) => {
+    applyReplacement(result, query, replacement);
+  });
+  render();
+  renderSelectionEditor();
+  performFind();
+}
+
+function applyReplacement(result, query, replacement) {
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  if (result.type === "node") {
+    const node = state.nodes.find((n) => n.id === result.id);
+    if (!node) return;
+    if (result.field === "label") {
+      node.label = node.label.replace(regex, replacement);
+    } else if (result.field === "labelDescription") {
+      node.labelDescription = node.labelDescription.replace(regex, replacement);
+    } else if (result.field.startsWith("subLabel-")) {
+      const parts = result.field.split("-");
+      const idx = Number(parts[1]);
+      const prop = parts[2];
+      const sl = node.subLabels[idx];
+      if (!sl) return;
+      if (prop === "text") {
+        if (typeof sl === "string") { node.subLabels[idx] = sl.replace(regex, replacement); }
+        else { sl.text = sl.text.replace(regex, replacement); }
+      } else if (prop === "rightText" && typeof sl !== "string") {
+        sl.rightText = sl.rightText.replace(regex, replacement);
+      }
+    }
+  } else if (result.type === "text-label") {
+    const tl = state.textLabels.find((t) => t.id === result.id);
+    if (tl) tl.text = tl.text.replace(regex, replacement);
+  }
+}
+
+// Wire up find bar events
+findInput.addEventListener("input", performFind);
+findInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (e.shiftKey) findPrev();
+    else findNext();
+  }
+  if (e.key === "Escape") closeFindBar();
+});
+replaceInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeFindBar();
+});
+findNextBtn.addEventListener("click", findNext);
+findPrevBtn.addEventListener("click", findPrev);
+findCloseBtn.addEventListener("click", closeFindBar);
+findToggleReplaceBtn.addEventListener("click", () => {
+  const isHidden = replaceRow.classList.toggle("hidden");
+  findToggleReplaceBtn.classList.toggle("expanded", !isHidden);
+  if (!isHidden) replaceInput.focus();
+});
+replaceOneBtn.addEventListener("click", replaceCurrentResult);
+replaceAllBtn.addEventListener("click", replaceAllResults);
+
+document.getElementById("openFindBtn").addEventListener("click", () => openFindBar());
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (findBar.classList.contains("hidden")) openFindBar();
+    else closeFindBar();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!findBar.classList.contains("hidden") && !replaceRow.classList.contains("hidden")) {
+      closeFindBar();
+    } else {
+      openFindBar();
+      replaceRow.classList.remove("hidden");
+      findToggleReplaceBtn.classList.add("expanded");
+      replaceInput.focus();
+    }
+  }
+}, true);
 
 function init() {
   setTool("select");
