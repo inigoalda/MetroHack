@@ -2264,14 +2264,17 @@ function handlePointerDown(event) {
     event.button === 0
   ) {
     const clickedStreamId = event.target.closest(".stream-line")?.dataset.streamId;
-    const targetStreamId = clickedStreamId || state.streams[0]?.id;
-    if (!targetStreamId) {
-      toolHint.textContent = "Create at least one stream first.";
+    if (!clickedStreamId) {
+      if (!state.streams.length) {
+        showFloatingError("Create at least one stream first.");
+      } else {
+        showFloatingError("Click on a stream to place the node.");
+      }
       return;
     }
-    const constrainedStart = constrainActivityToStream(svgPointFromEvent(event), targetStreamId);
+    const constrainedStart = constrainActivityToStream(svgPointFromEvent(event), clickedStreamId);
     state.interaction.mode = "node-create";
-    state.interaction.nodeCreateStreamId = targetStreamId;
+    state.interaction.nodeCreateStreamId = clickedStreamId;
     state.interaction.startPoint = constrainedStart;
     state.interaction.previewPoint = constrainedStart;
     render();
@@ -2592,7 +2595,7 @@ function showFloatingError(message) {
     el.classList.remove('show');
     el.classList.add('hide');
     el.addEventListener('transitionend', () => el.remove());
-  }, 2500);
+  }, 2000);
 }
 
 function resetInteractionState() {
