@@ -955,6 +955,61 @@ button:disabled {
   box-shadow: var(--toggle-active-shadow);
 }
 
+/* ── Position selector buttons ───────────────────────────────── */
+
+.pos-btn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: -2px;
+}
+
+.pos-btn-row.pos-btn-full {
+  display: flex;
+  width: 100%;
+}
+
+.pos-btn-full .pos-btn {
+  flex: 1;
+}
+
+.pos-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 7px;
+  background: var(--input-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.pos-btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--text-strong);
+}
+
+.pos-btn.active {
+  border-color: var(--accent);
+  background: var(--toggle-active-bg);
+  color: var(--accent);
+  box-shadow: var(--toggle-active-shadow);
+}
+
+.sub-label-pos-row {
+  display: grid;
+  gap: 6px;
+}
+
+.sub-label-pos-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .selection-editor textarea {
   width: 100%;
   resize: vertical;

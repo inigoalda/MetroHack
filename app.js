@@ -232,7 +232,9 @@ function createNode({ streamId, type, x, y, label, date, status = "planned" }) {
     labelTextColor: type === "deliverable" ? "#ffffff" : "#000000",
     labelBgColor: type === "deliverable" ? "#000000" : null,
     labelMaxWidth: null,
+    labelPosition: type === "deliverable" ? undefined : "down",
     labelDescription: type === "deliverable" ? "" : undefined,
+    labelDescPosition: type === "deliverable" ? "right" : undefined,
     subLabels: type === "deliverable" ? [] : undefined,
   };
   state.nodes.push(node);
@@ -1346,66 +1348,183 @@ function renderLabels() {
     const rawSubs = node.subLabels || [];
     const subObjs = rawSubs.map((s) => typeof s === "string" ? { text: s, rightText: "" } : s);
     const isDeliv = node.type === "deliverable";
+    const pos = node.labelPosition || (isDeliv ? "down" : "down");
     const allLabels = [
-      { text: node.label, rightText: node.labelDescription || "", textColor: mainStyle.textColor, bgColor: mainStyle.bgColor },
+      { text: node.label, rightText: node.labelDescription || "", textColor: mainStyle.textColor, bgColor: mainStyle.bgColor, descPosition: node.labelDescPosition || "right" },
       ...subObjs.map((s) => ({
         text: s.text,
         rightText: s.rightText || "",
         textColor: s.textColor || mainStyle.textColor,
         bgColor: s.bgColor !== undefined ? s.bgColor : mainStyle.bgColor,
+        descPosition: s.descPosition || "right",
       })),
     ];
     const labelGap = 8;
 
-    let curY = node.y + 22;
+    // Compute starting position based on label position
+    let curY, anchorX, textAlign;
+    if (pos === "up") {
+      // Render upward: we need to measure first, then shift up
+      textAlign = "center";
+      anchorX = node.x - mw / 2;
+    } else if (pos === "left") {
+      textAlign = "right";
+      anchorX = node.x - 22;
+      curY = node.y - fs * 0.7;
+    } else if (pos === "right") {
+      textAlign = "left";
+      anchorX = node.x + 22;
+      curY = node.y - fs * 0.7;
+    } else {
+      // "down" (default)
+      textAlign = "center";
+      anchorX = node.x - mw / 2;
+      curY = node.y + 22;
+    }
+
     const labelEntries = [];
 
-    allLabels.forEach((entry, i) => {
+    if (pos === "up") {
+      // Render upward: measure all first, then place bottom-to-top
+      const measured = [];
+      allLabels.forEach((entry) => {
+        const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+        fo.setAttribute("x", anchorX);
+        fo.setAttribute("y", 0);
+        fo.setAttribute("width", mw);
+        fo.setAttribute("height", 200);
+        fo.setAttribute("class", "label-fo");
+        const div = document.createElement("div");
+        div.className = "label-wrap" + (isDeliv ? " label-deliverable" : "");
+        div.style.cssText = `color:${entry.textColor};font-size:${fs}px;max-width:${mw}px;text-align:${textAlign};`;
+        div.textContent = entry.text;
+        fo.appendChild(div);
+        labelsLayer.appendChild(fo);
+        const actualH = div.offsetHeight || fs * 1.4;
+        fo.setAttribute("height", actualH + 4);
+        measured.push({ fo, h: actualH, entry });
+      });
+      // Stack from bottom (just above node) going up
+      let bottomY = node.y - 22;
+      for (let i = measured.length - 1; i >= 0; i--) {
+        const m = measured[i];
+        const y = bottomY - m.h;
+        m.fo.setAttribute("y", y);
+        labelEntries.push({ fo: m.fo, y, h: m.h, rightText: m.entry.rightText, bgColor: m.entry.bgColor, descPosition: m.entry.descPosition });
+        bottomY = y - 6 - labelGap;
+      }
+    } else if (pos === "left" || pos === "right") {
+      // Horizontal: measure first, then vertically center on node
       const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
-      fo.setAttribute("x", node.x - mw / 2);
-      fo.setAttribute("y", curY);
+      if (pos === "left") {
+        fo.setAttribute("x", anchorX - mw);
+      } else {
+        fo.setAttribute("x", anchorX);
+      }
+      fo.setAttribute("y", 0);
       fo.setAttribute("width", mw);
       fo.setAttribute("height", 200);
       fo.setAttribute("class", "label-fo");
-
       const div = document.createElement("div");
       div.className = "label-wrap" + (isDeliv ? " label-deliverable" : "");
-      div.style.cssText = `color:${entry.textColor};font-size:${fs}px;max-width:${mw}px;text-align:center;`;
-      div.textContent = entry.text;
+      div.style.cssText = `color:${allLabels[0].textColor};font-size:${fs}px;max-width:${mw}px;text-align:${textAlign};`;
+      div.textContent = allLabels[0].text;
       fo.appendChild(div);
       labelsLayer.appendChild(fo);
-
       const actualH = div.offsetHeight || fs * 1.4;
       fo.setAttribute("height", actualH + 4);
+      // Vertically center on node
+      const centeredY = node.y - actualH / 2;
+      fo.setAttribute("y", centeredY);
+      labelEntries.push({ fo, y: centeredY, h: actualH, rightText: allLabels[0].rightText, bgColor: allLabels[0].bgColor, descPosition: allLabels[0].descPosition });
 
-      labelEntries.push({ fo, y: curY, h: actualH, rightText: entry.rightText, bgColor: entry.bgColor });
-      curY += actualH + 6 + labelGap;
-    });
+      // For deliverables with stacked labels, remaining labels still go downward
+      if (isDeliv && allLabels.length > 1) {
+        let stackY = node.y + 22;
+        for (let i = 1; i < allLabels.length; i++) {
+          const entry = allLabels[i];
+          const sfo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+          sfo.setAttribute("x", node.x - mw / 2);
+          sfo.setAttribute("y", stackY);
+          sfo.setAttribute("width", mw);
+          sfo.setAttribute("height", 200);
+          sfo.setAttribute("class", "label-fo");
+          const sdiv = document.createElement("div");
+          sdiv.className = "label-wrap label-deliverable";
+          sdiv.style.cssText = `color:${entry.textColor};font-size:${fs}px;max-width:${mw}px;text-align:center;`;
+          sdiv.textContent = entry.text;
+          sfo.appendChild(sdiv);
+          labelsLayer.appendChild(sfo);
+          const sH = sdiv.offsetHeight || fs * 1.4;
+          sfo.setAttribute("height", sH + 4);
+          labelEntries.push({ fo: sfo, y: stackY, h: sH, rightText: entry.rightText, bgColor: entry.bgColor, descPosition: entry.descPosition });
+          stackY += sH + 6 + labelGap;
+        }
+      }
+    } else {
+      // "down" (default) — original stacking behavior
+      curY = node.y + 22;
+      allLabels.forEach((entry) => {
+        const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+        fo.setAttribute("x", node.x - mw / 2);
+        fo.setAttribute("y", curY);
+        fo.setAttribute("width", mw);
+        fo.setAttribute("height", 200);
+        fo.setAttribute("class", "label-fo");
+        const div = document.createElement("div");
+        div.className = "label-wrap" + (isDeliv ? " label-deliverable" : "");
+        div.style.cssText = `color:${entry.textColor};font-size:${fs}px;max-width:${mw}px;text-align:center;`;
+        div.textContent = entry.text;
+        fo.appendChild(div);
+        labelsLayer.appendChild(fo);
+        const actualH = div.offsetHeight || fs * 1.4;
+        fo.setAttribute("height", actualH + 4);
+        labelEntries.push({ fo, y: curY, h: actualH, rightText: entry.rightText, bgColor: entry.bgColor, descPosition: entry.descPosition });
+        curY += actualH + 6 + labelGap;
+      });
+    }
 
+    // Background rectangles
     labelEntries.forEach((entry) => {
       if (!entry.bgColor) return;
+      const foX = parseFloat(entry.fo.getAttribute("x"));
+      const foW = parseFloat(entry.fo.getAttribute("width"));
       const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       rect.classList.add("label-bg");
-      rect.setAttribute("x", node.x - mw / 2 - 6);
+      rect.setAttribute("x", foX - 6);
       rect.setAttribute("y", entry.y - 3);
-      rect.setAttribute("width", mw + 12);
+      rect.setAttribute("width", foW + 12);
       rect.setAttribute("height", entry.h + 10);
       rect.setAttribute("fill", entry.bgColor);
       labelsLayer.insertBefore(rect, entry.fo);
     });
 
-    // Render right-side text for sub-labels
+    // Render description text based on descPosition per label
     labelEntries.forEach((entry) => {
       if (!entry.rightText) return;
+      const dp = entry.descPosition || "right";
       const rfo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
-      rfo.setAttribute("x", node.x + mw / 2 + 10);
-      rfo.setAttribute("y", entry.y);
-      rfo.setAttribute("width", 2000);
-      rfo.setAttribute("height", entry.h + 4);
       rfo.setAttribute("class", "label-fo");
       const rdiv = document.createElement("div");
       rdiv.className = "label-wrap label-deliverable label-right-text";
-      rdiv.style.cssText = `color:#000000;font-size:${fs}px;text-align:left;`;
+
+      const foX = parseFloat(entry.fo.getAttribute("x"));
+      const foW = parseFloat(entry.fo.getAttribute("width"));
+
+      if (dp === "left") {
+        rfo.setAttribute("x", foX - 2010);
+        rfo.setAttribute("y", entry.y);
+        rfo.setAttribute("width", 2000);
+        rfo.setAttribute("height", entry.h + 4);
+        rdiv.style.cssText = `color:#000000;font-size:${fs}px;text-align:right;`;
+      } else {
+        // "right" (default)
+        rfo.setAttribute("x", foX + foW + 10);
+        rfo.setAttribute("y", entry.y);
+        rfo.setAttribute("width", 2000);
+        rfo.setAttribute("height", entry.h + 4);
+        rdiv.style.cssText = `color:#000000;font-size:${fs}px;text-align:left;`;
+      }
       rdiv.textContent = entry.rightText;
       rfo.appendChild(rdiv);
       labelsLayer.appendChild(rfo);
@@ -1713,6 +1832,7 @@ function renderSelectionEditor() {
       rightText: node.labelDescription || "",
       textColor: mainStyle.textColor,
       bgColor: mainStyle.bgColor,
+      descPosition: node.labelDescPosition || "right",
     };
     const subs = (node.subLabels || []).map((s) => {
       if (typeof s === "string") s = { text: s, rightText: "" };
@@ -1721,6 +1841,7 @@ function renderSelectionEditor() {
         rightText: s.rightText || "",
         textColor: s.textColor || (node.type === "deliverable" ? "#ffffff" : "#000000"),
         bgColor: s.bgColor !== undefined ? s.bgColor : (node.type === "deliverable" ? "#000000" : null),
+        descPosition: s.descPosition || "right",
       };
     });
     return [main, ...subs];
@@ -1733,11 +1854,13 @@ function renderSelectionEditor() {
     node.labelDescription = m.rightText;
     node.labelTextColor = m.textColor;
     node.labelBgColor = m.bgColor;
+    node.labelDescPosition = m.descPosition || "right";
     node.subLabels = arr.slice(1).map((s) => ({
       text: s.text,
       rightText: s.rightText || "",
       textColor: s.textColor,
       bgColor: s.bgColor,
+      descPosition: s.descPosition || "right",
     }));
   }
 
@@ -1757,6 +1880,13 @@ function renderSelectionEditor() {
         </div>
         <label class="sub-label-field">Deliverable ID <input class="label-text-input" value="${escapeHtml(lbl.text)}" data-label-idx="${i}" /></label>
         <label class="sub-label-field">Description <input class="label-right-input" value="${escapeHtml(lbl.rightText)}" data-label-idx="${i}" /></label>
+        <div class="sub-label-pos-row">
+          <span class="sub-label-pos-label">Label Position</span>
+          <div class="pos-btn-row pos-btn-full">
+            <button class="pos-btn${lbl.descPosition === "left" ? " active" : ""}" data-label-idx="${i}" data-pos="left">Left</button>
+            <button class="pos-btn${lbl.descPosition === "right" || !lbl.descPosition ? " active" : ""}" data-label-idx="${i}" data-pos="right">Right</button>
+          </div>
+        </div>
         <div class="sub-label-color-row">
           <label class="sub-label-color-field">Text <input type="color" class="label-text-color" value="${lbl.textColor}" data-label-idx="${i}" /></label>
           <label class="sub-label-color-field">Bg <input type="color" class="label-bg-color" value="${lbl.bgColor || (isDeliverable ? "#000000" : "#ffffff")}" data-label-idx="${i}" ${hasBg ? "" : "disabled"} /></label>
@@ -1771,9 +1901,19 @@ function renderSelectionEditor() {
       </div>`;
   }
 
+  const actLabelPos = node.labelPosition || "down";
+
   selectionEditor.innerHTML = `
     ${isDeliverable ? "" : `<label>Label <input id="editNodeLabel" value="${escapeHtml(node.label)}" /></label>`}
     ${isDeliverable ? labelsHtml : ""}
+    ${isDeliverable ? "" : `
+    <label>Label Position</label>
+    <div class="pos-btn-row pos-btn-full" id="labelPosRow">
+      <button class="pos-btn${actLabelPos === "up" ? " active" : ""}" data-pos="up">Up</button>
+      <button class="pos-btn${actLabelPos === "down" ? " active" : ""}" data-pos="down">Down</button>
+      <button class="pos-btn${actLabelPos === "left" ? " active" : ""}" data-pos="left">Left</button>
+      <button class="pos-btn${actLabelPos === "right" ? " active" : ""}" data-pos="right">Right</button>
+    </div>`}
     <label>Date <input id="editNodeDate" type="date" value="${node.date}" /></label>
     <label class="range-label">Label Max Width <span id="editNodeMaxWidthVal">${nodeMaxW}px</span>
       <input id="editNodeMaxWidth" type="range" min="40" max="400" step="10" value="${nodeMaxW}" />
@@ -1804,6 +1944,17 @@ function renderSelectionEditor() {
       captureHistorySnapshot();
       node.label = event.target.value;
       render();
+    });
+    // Activity label position selector
+    document.querySelectorAll("#labelPosRow .pos-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const newPos = btn.dataset.pos;
+        if (node.labelPosition === newPos) return;
+        captureHistorySnapshot();
+        node.labelPosition = newPos;
+        renderSelectionEditor();
+        render();
+      });
     });
   }
 
@@ -1879,6 +2030,21 @@ function renderSelectionEditor() {
       });
     });
 
+    // Per-label description position
+    document.querySelectorAll(".sub-label-pos-row .pos-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.labelIdx);
+        const newPos = btn.dataset.pos;
+        const labels = getAllLabels();
+        if (labels[idx].descPosition === newPos) return;
+        captureHistorySnapshot();
+        labels[idx].descPosition = newPos;
+        writeAllLabels(labels);
+        renderSelectionEditor();
+        render();
+      });
+    });
+
     // Remove label
     document.querySelectorAll(".sub-label-remove").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1899,7 +2065,7 @@ function renderSelectionEditor() {
       addBtn.addEventListener("click", () => {
         captureHistorySnapshot();
         if (!node.subLabels) node.subLabels = [];
-        node.subLabels.push({ text: "Deliverable", rightText: "", textColor: "#ffffff", bgColor: "#000000" });
+        node.subLabels.push({ text: "Deliverable", rightText: "", textColor: "#ffffff", bgColor: "#000000", descPosition: "right" });
         renderSelectionEditor();
         render();
       });
@@ -3776,40 +3942,89 @@ function renderLabels(){
     var rawSubs=node.subLabels||[];
     var subObjs=rawSubs.map(function(s){return typeof s==="string"?{text:s,rightText:""}:s;});
     var isDeliv=node.type==="deliverable";
-    var allLabels=[{text:node.label,rightText:node.labelDescription||"",textColor:mainStyle.textColor,bgColor:mainStyle.bgColor}].concat(subObjs.map(function(s){
-      return{text:s.text,rightText:s.rightText||"",textColor:s.textColor||mainStyle.textColor,bgColor:s.bgColor!==undefined?s.bgColor:mainStyle.bgColor};
+    var pos=node.labelPosition||(isDeliv?"down":"down");
+    var allLabels=[{text:node.label,rightText:node.labelDescription||"",textColor:mainStyle.textColor,bgColor:mainStyle.bgColor,descPosition:node.labelDescPosition||"right"}].concat(subObjs.map(function(s){
+      return{text:s.text,rightText:s.rightText||"",textColor:s.textColor||mainStyle.textColor,bgColor:s.bgColor!==undefined?s.bgColor:mainStyle.bgColor,descPosition:s.descPosition||"right"};
     }));
-    var labelGap=8;var curY=node.y+22;var entries=[];
-    allLabels.forEach(function(entry){
+    var labelGap=8;var entries=[];
+    if(pos==="up"){
+      var measured=[];
+      allLabels.forEach(function(entry){
+        var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
+        fo.setAttribute("x",node.x-mw/2);fo.setAttribute("y",0);fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
+        var div=document.createElement("div");div.className="label-wrap"+(isDeliv?" label-deliverable":"");
+        div.style.cssText="color:"+entry.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
+        div.textContent=entry.text;fo.appendChild(div);labelsLayer.appendChild(fo);
+        var actualH=div.offsetHeight||fs*1.4;fo.setAttribute("height",actualH+4);
+        measured.push({fo:fo,h:actualH,entry:entry});
+      });
+      var bottomY=node.y-22;
+      for(var i=measured.length-1;i>=0;i--){
+        var m=measured[i];var y=bottomY-m.h;m.fo.setAttribute("y",y);
+        entries.push({fo:m.fo,y:y,h:m.h,rightText:m.entry.rightText,bgColor:m.entry.bgColor,descPosition:m.entry.descPosition});
+        bottomY=y-6-labelGap;
+      }
+    }else if(pos==="left"||pos==="right"){
+      var tAlign=pos==="left"?"right":"left";
       var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
-      fo.setAttribute("x",node.x-mw/2);fo.setAttribute("y",curY);
-      fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
-      var div=document.createElement("div");
-      div.className="label-wrap"+(isDeliv?" label-deliverable":"");
-      div.style.cssText="color:"+entry.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
-      div.textContent=entry.text;fo.appendChild(div);labelsLayer.appendChild(fo);
+      var aX=pos==="left"?node.x-22-mw:node.x+22;
+      fo.setAttribute("x",aX);fo.setAttribute("y",0);fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
+      var div=document.createElement("div");div.className="label-wrap"+(isDeliv?" label-deliverable":"");
+      div.style.cssText="color:"+allLabels[0].textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:"+tAlign+";";
+      div.textContent=allLabels[0].text;fo.appendChild(div);labelsLayer.appendChild(fo);
       var actualH=div.offsetHeight||fs*1.4;fo.setAttribute("height",actualH+4);
-      entries.push({fo:fo,y:curY,h:actualH,rightText:entry.rightText,bgColor:entry.bgColor});
-      curY+=actualH+6+labelGap;
-    });
+      var centeredY=node.y-actualH/2;
+      fo.setAttribute("y",centeredY);
+      entries.push({fo:fo,y:centeredY,h:actualH,rightText:allLabels[0].rightText,bgColor:allLabels[0].bgColor,descPosition:allLabels[0].descPosition});
+      if(isDeliv&&allLabels.length>1){
+        var stackY=node.y+22;
+        for(var i=1;i<allLabels.length;i++){
+          var entry=allLabels[i];
+          var sfo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
+          sfo.setAttribute("x",node.x-mw/2);sfo.setAttribute("y",stackY);sfo.setAttribute("width",mw);sfo.setAttribute("height",200);sfo.setAttribute("class","label-fo");
+          var sdiv=document.createElement("div");sdiv.className="label-wrap label-deliverable";
+          sdiv.style.cssText="color:"+entry.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
+          sdiv.textContent=entry.text;sfo.appendChild(sdiv);labelsLayer.appendChild(sfo);
+          var sH=sdiv.offsetHeight||fs*1.4;sfo.setAttribute("height",sH+4);
+          entries.push({fo:sfo,y:stackY,h:sH,rightText:entry.rightText,bgColor:entry.bgColor,descPosition:entry.descPosition});
+          stackY+=sH+6+labelGap;
+        }
+      }
+    }else{
+      var curY=node.y+22;
+      allLabels.forEach(function(entry){
+        var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
+        fo.setAttribute("x",node.x-mw/2);fo.setAttribute("y",curY);fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
+        var div=document.createElement("div");div.className="label-wrap"+(isDeliv?" label-deliverable":"");
+        div.style.cssText="color:"+entry.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
+        div.textContent=entry.text;fo.appendChild(div);labelsLayer.appendChild(fo);
+        var actualH=div.offsetHeight||fs*1.4;fo.setAttribute("height",actualH+4);
+        entries.push({fo:fo,y:curY,h:actualH,rightText:entry.rightText,bgColor:entry.bgColor,descPosition:entry.descPosition});
+        curY+=actualH+6+labelGap;
+      });
+    }
     entries.forEach(function(entry){
       if(!entry.bgColor)return;
+      var foX=parseFloat(entry.fo.getAttribute("x"));var foW=parseFloat(entry.fo.getAttribute("width"));
       var rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
-      rect.classList.add("label-bg");
-      rect.setAttribute("x",node.x-mw/2-6);rect.setAttribute("y",entry.y-3);
-      rect.setAttribute("width",mw+12);rect.setAttribute("height",entry.h+10);
-      rect.setAttribute("fill",entry.bgColor);
+      rect.classList.add("label-bg");rect.setAttribute("x",foX-6);rect.setAttribute("y",entry.y-3);
+      rect.setAttribute("width",foW+12);rect.setAttribute("height",entry.h+10);rect.setAttribute("fill",entry.bgColor);
       labelsLayer.insertBefore(rect,entry.fo);
     });
     entries.forEach(function(entry){
       if(!entry.rightText)return;
+      var dp=entry.descPosition||"right";
       var rfo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
-      rfo.setAttribute("x",node.x+mw/2+10);rfo.setAttribute("y",entry.y);
-      rfo.setAttribute("width",2000);rfo.setAttribute("height",entry.h+4);
       rfo.setAttribute("class","label-fo");
-      var rdiv=document.createElement("div");
-      rdiv.className="label-wrap label-deliverable label-right-text";
-      rdiv.style.cssText="color:#000000;font-size:"+fs+"px;text-align:left;";
+      var rdiv=document.createElement("div");rdiv.className="label-wrap label-deliverable label-right-text";
+      var foX=parseFloat(entry.fo.getAttribute("x"));var foW=parseFloat(entry.fo.getAttribute("width"));
+      if(dp==="left"){
+        rfo.setAttribute("x",foX-2010);rfo.setAttribute("y",entry.y);rfo.setAttribute("width",2000);rfo.setAttribute("height",entry.h+4);
+        rdiv.style.cssText="color:#000000;font-size:"+fs+"px;text-align:right;";
+      }else{
+        rfo.setAttribute("x",foX+foW+10);rfo.setAttribute("y",entry.y);rfo.setAttribute("width",2000);rfo.setAttribute("height",entry.h+4);
+        rdiv.style.cssText="color:#000000;font-size:"+fs+"px;text-align:left;";
+      }
       rdiv.textContent=entry.rightText;rfo.appendChild(rdiv);labelsLayer.appendChild(rfo);
     });
   });
