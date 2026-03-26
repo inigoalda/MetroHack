@@ -427,6 +427,14 @@ button:disabled {
   border-bottom: 1px solid var(--calendar-border);
   backdrop-filter: blur(8px);
   pointer-events: none;
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.calendar-bar.calendar-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
 }
 
 .cal-month {
@@ -479,6 +487,10 @@ button:disabled {
   stroke: var(--calendar-guide);
   stroke-width: 0.5;
   pointer-events: none;
+}
+
+#calendarGuidesLayer {
+  transition: opacity 0.25s ease;
 }
 
 .canvas-bg {

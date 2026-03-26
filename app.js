@@ -4536,6 +4536,15 @@ function initEvents() {
     snapEnabled = !snapEnabled;
     document.getElementById("toggleSnap").classList.toggle("active", snapEnabled);
   });
+
+  document.getElementById("toggleCalendar").addEventListener("click", () => {
+    const btn = document.getElementById("toggleCalendar");
+    const isVisible = !calendarBar.classList.contains("calendar-hidden");
+    calendarBar.classList.toggle("calendar-hidden", isVisible);
+    calendarGuidesLayer.style.opacity = isVisible ? "0" : "1";
+    btn.classList.toggle("active", !isVisible);
+  });
+
   document.getElementById("labelFontSize").addEventListener("input", (event) => {
     labelFontSize = Number(event.target.value);
     document.getElementById("labelFontSizeValue").textContent = labelFontSize + "px";
