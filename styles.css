@@ -981,39 +981,94 @@ button:disabled {
   gap: 6px;
 }
 
-
-.sub-label-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
 .sub-label-stack {
   display: grid;
   gap: 6px;
-  padding-bottom: 12px;
+  padding: 8px;
   margin-bottom: 4px;
-  border-bottom: 1px solid var(--line-faint);
+  border: 1px solid var(--line-faint);
+  border-radius: 8px;
+  cursor: grab;
+  transition: opacity 0.15s, box-shadow 0.15s;
 }
 
 .sub-label-stack:last-of-type {
-  border-bottom: none;
   margin-bottom: 0;
+}
+
+.sub-label-stack.label-dragging {
+  opacity: 0.4;
+}
+
+.sub-label-stack.label-drag-over {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+
+.sub-label-drag-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.sub-label-grip {
+  cursor: grab;
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.sub-label-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.sub-label-drag-header .sub-label-remove {
+  margin-left: auto;
+  width: auto;
+  padding: 2px 8px;
+  font-size: 0.78rem;
 }
 
 .sub-label-field {
   margin-bottom: 0;
 }
 
-.sub-label-stack .sub-label-remove {
-  justify-self: end;
-  width: auto;
-  padding: 6px 12px;
-  font-size: 0.78rem;
+.sub-label-stack input[type="text"],
+.sub-label-stack input:not([type]) {
+  width: 100%;
 }
 
-.sub-label-stack input {
-  width: 100%;
+.sub-label-color-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sub-label-color-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0;
+}
+
+.sub-label-color-field input[type="color"] {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--btn-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sub-label-color-row .toggle-btn {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  min-width: 34px;
 }
 
 .sub-label-remove {

@@ -1340,12 +1340,21 @@ function renderLabels() {
   labelsLayer.innerHTML = "";
 
   state.nodes.forEach((node) => {
-    const style = getNodeLabelStyle(node);
+    const mainStyle = getNodeLabelStyle(node);
     const mw = node.labelMaxWidth || DEFAULT_LABEL_MAX_WIDTH;
     const fs = labelFontSize;
     const rawSubs = node.subLabels || [];
     const subObjs = rawSubs.map((s) => typeof s === "string" ? { text: s, rightText: "" } : s);
-    const allLabels = [{ text: node.label, rightText: node.labelDescription || "" }, ...subObjs];
+    const isDeliv = node.type === "deliverable";
+    const allLabels = [
+      { text: node.label, rightText: node.labelDescription || "", textColor: mainStyle.textColor, bgColor: mainStyle.bgColor },
+      ...subObjs.map((s) => ({
+        text: s.text,
+        rightText: s.rightText || "",
+        textColor: s.textColor || mainStyle.textColor,
+        bgColor: s.bgColor !== undefined ? s.bgColor : mainStyle.bgColor,
+      })),
+    ];
     const labelGap = 8;
 
     let curY = node.y + 22;
@@ -1360,8 +1369,8 @@ function renderLabels() {
       fo.setAttribute("class", "label-fo");
 
       const div = document.createElement("div");
-      div.className = "label-wrap" + (node.type === "deliverable" ? " label-deliverable" : "");
-      div.style.cssText = `color:${style.textColor};font-size:${fs}px;max-width:${mw}px;text-align:center;`;
+      div.className = "label-wrap" + (isDeliv ? " label-deliverable" : "");
+      div.style.cssText = `color:${entry.textColor};font-size:${fs}px;max-width:${mw}px;text-align:center;`;
       div.textContent = entry.text;
       fo.appendChild(div);
       labelsLayer.appendChild(fo);
@@ -1369,22 +1378,21 @@ function renderLabels() {
       const actualH = div.offsetHeight || fs * 1.4;
       fo.setAttribute("height", actualH + 4);
 
-      labelEntries.push({ fo, y: curY, h: actualH, rightText: entry.rightText });
+      labelEntries.push({ fo, y: curY, h: actualH, rightText: entry.rightText, bgColor: entry.bgColor });
       curY += actualH + 6 + labelGap;
     });
 
-    if (style.bgColor) {
-      labelEntries.forEach((entry) => {
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.classList.add("label-bg");
-        rect.setAttribute("x", node.x - mw / 2 - 6);
-        rect.setAttribute("y", entry.y - 3);
-        rect.setAttribute("width", mw + 12);
-        rect.setAttribute("height", entry.h + 10);
-        rect.setAttribute("fill", style.bgColor);
-        labelsLayer.insertBefore(rect, entry.fo);
-      });
-    }
+    labelEntries.forEach((entry) => {
+      if (!entry.bgColor) return;
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.classList.add("label-bg");
+      rect.setAttribute("x", node.x - mw / 2 - 6);
+      rect.setAttribute("y", entry.y - 3);
+      rect.setAttribute("width", mw + 12);
+      rect.setAttribute("height", entry.h + 10);
+      rect.setAttribute("fill", entry.bgColor);
+      labelsLayer.insertBefore(rect, entry.fo);
+    });
 
     // Render right-side text for sub-labels
     labelEntries.forEach((entry) => {
@@ -1693,40 +1701,89 @@ function renderSelectionEditor() {
   }
 
   const node = selected.entity;
-  const hasBg = !!getNodeLabelStyle(node).bgColor;
   const nodeMaxW = node.labelMaxWidth || DEFAULT_LABEL_MAX_WIDTH;
   const isDeliverable = node.type === "deliverable";
-  const subs = (node.subLabels || []).map((s) => typeof s === "string" ? { text: s, rightText: "" } : s);
 
-  let subLabelsHtml = "";
+  // Build unified labels array: [main label, ...subLabels]
+  // Each entry: { text, rightText, textColor, bgColor }
+  function getAllLabels() {
+    const mainStyle = getNodeLabelStyle(node);
+    const main = {
+      text: node.label,
+      rightText: node.labelDescription || "",
+      textColor: mainStyle.textColor,
+      bgColor: mainStyle.bgColor,
+    };
+    const subs = (node.subLabels || []).map((s) => {
+      if (typeof s === "string") s = { text: s, rightText: "" };
+      return {
+        text: s.text,
+        rightText: s.rightText || "",
+        textColor: s.textColor || (node.type === "deliverable" ? "#ffffff" : "#000000"),
+        bgColor: s.bgColor !== undefined ? s.bgColor : (node.type === "deliverable" ? "#000000" : null),
+      };
+    });
+    return [main, ...subs];
+  }
+
+  function writeAllLabels(arr) {
+    // arr[0] is the main label, rest are subLabels
+    const m = arr[0];
+    node.label = m.text;
+    node.labelDescription = m.rightText;
+    node.labelTextColor = m.textColor;
+    node.labelBgColor = m.bgColor;
+    node.subLabels = arr.slice(1).map((s) => ({
+      text: s.text,
+      rightText: s.rightText || "",
+      textColor: s.textColor,
+      bgColor: s.bgColor,
+    }));
+  }
+
+  const allLabels = getAllLabels();
+
+  let labelsHtml = "";
   if (isDeliverable) {
-    const subInputs = subs.map((s, i) => `
-      <div class="sub-label-stack" data-sub-idx="${i}">
-        <label class="sub-label-field">Deliverable ID <input class="sub-label-input" value="${escapeHtml(s.text)}" data-sub-idx="${i}" /></label>
-        <label class="sub-label-field">Description <input class="sub-label-right-input" value="${escapeHtml(s.rightText)}" data-sub-idx="${i}" /></label>
-        <button class="sub-label-remove danger" data-sub-idx="${i}" title="Remove">&times;</button>
-      </div>`).join("");
-    subLabelsHtml = `
-      <hr class="sub-labels-separator" />
-      <div class="sub-labels-section">
-        ${subInputs}
+    const labelCards = allLabels.map((lbl, i) => {
+      const hasBg = !!lbl.bgColor;
+      const canDelete = allLabels.length > 1;
+      return `
+      <div class="sub-label-stack" data-label-idx="${i}">
+        <div class="sub-label-drag-header">
+          <span class="sub-label-grip">⠿</span>
+          <span class="sub-label-title">Label ${i + 1}</span>
+          ${canDelete ? `<button class="sub-label-remove danger" data-label-idx="${i}" title="Remove">&times;</button>` : ""}
+        </div>
+        <label class="sub-label-field">Deliverable ID <input class="label-text-input" value="${escapeHtml(lbl.text)}" data-label-idx="${i}" /></label>
+        <label class="sub-label-field">Description <input class="label-right-input" value="${escapeHtml(lbl.rightText)}" data-label-idx="${i}" /></label>
+        <div class="sub-label-color-row">
+          <label class="sub-label-color-field">Text <input type="color" class="label-text-color" value="${lbl.textColor}" data-label-idx="${i}" /></label>
+          <label class="sub-label-color-field">Bg <input type="color" class="label-bg-color" value="${lbl.bgColor || (isDeliverable ? "#000000" : "#ffffff")}" data-label-idx="${i}" ${hasBg ? "" : "disabled"} /></label>
+          <button class="label-bg-toggle toggle-btn${hasBg ? " active" : ""}" data-label-idx="${i}">${hasBg ? "On" : "Off"}</button>
+        </div>
+      </div>`;
+    }).join("");
+    labelsHtml = `
+      <div class="sub-labels-section" id="labelsContainer">
+        ${labelCards}
         <button id="addSubLabel" class="sub-label-add">+ Add Label</button>
       </div>`;
   }
 
   selectionEditor.innerHTML = `
-    <label>${isDeliverable ? "Deliverable ID" : "Label"} <input id="editNodeLabel" value="${escapeHtml(node.label)}" /></label>
-    ${isDeliverable ? `<label>Description <input id="editNodeLabelDesc" value="${escapeHtml(node.labelDescription || '')}" /></label>` : ''}
-    ${subLabelsHtml}
+    ${isDeliverable ? "" : `<label>Label <input id="editNodeLabel" value="${escapeHtml(node.label)}" /></label>`}
+    ${isDeliverable ? labelsHtml : ""}
     <label>Date <input id="editNodeDate" type="date" value="${node.date}" /></label>
     <label class="range-label">Label Max Width <span id="editNodeMaxWidthVal">${nodeMaxW}px</span>
       <input id="editNodeMaxWidth" type="range" min="40" max="400" step="10" value="${nodeMaxW}" />
     </label>
+    ${isDeliverable ? "" : `
     <label>Text Color <input id="editNodeTextColor" type="color" value="${getNodeLabelStyle(node).textColor}" /></label>
     <div class="editor-row">
-      <label class="editor-row-field">Background <input id="editNodeLabelBgColor" type="color" value="${(getNodeLabelStyle(node).bgColor || (isDeliverable ? "#000000" : "#ffffff"))}" ${hasBg ? "" : "disabled"} /></label>
-      <button id="editNodeLabelBgEnabled" class="toggle-btn${hasBg ? " active" : ""}">${hasBg ? "On" : "Off"}</button>
-    </div>
+      <label class="editor-row-field">Background <input id="editNodeLabelBgColor" type="color" value="${(getNodeLabelStyle(node).bgColor || "#ffffff")}" ${getNodeLabelStyle(node).bgColor ? "" : "disabled"} /></label>
+      <button id="editNodeLabelBgEnabled" class="toggle-btn${getNodeLabelStyle(node).bgColor ? " active" : ""}">${getNodeLabelStyle(node).bgColor ? "On" : "Off"}</button>
+    </div>`}
     <label>Status
       <select id="editNodeStatus">
         <option value="planned">Planned Activity</option>
@@ -1740,68 +1797,168 @@ function renderSelectionEditor() {
     </label>
   `;
 
-  document.getElementById("editNodeLabel").addEventListener("input", (event) => {
-    if (node.label === event.target.value) {
-      return;
-    }
-    captureHistorySnapshot();
-    node.label = event.target.value;
-    render();
-  });
+  // --- Activity label input ---
+  if (!isDeliverable) {
+    document.getElementById("editNodeLabel").addEventListener("input", (event) => {
+      if (node.label === event.target.value) return;
+      captureHistorySnapshot();
+      node.label = event.target.value;
+      render();
+    });
+  }
 
+  // --- Deliverable label editing ---
   if (isDeliverable) {
-    const descEl = document.getElementById("editNodeLabelDesc");
-    if (descEl) {
-      descEl.addEventListener("input", (event) => {
-        if (node.labelDescription === event.target.value) return;
-        captureHistorySnapshot();
-        node.labelDescription = event.target.value;
-        render();
-      });
-    }
-
     // Normalize subLabels to objects
     if (node.subLabels) {
       node.subLabels = node.subLabels.map((s) => typeof s === "string" ? { text: s, rightText: "" } : s);
     }
-    document.querySelectorAll(".sub-label-input").forEach((inp) => {
+
+    // Text inputs
+    document.querySelectorAll(".label-text-input").forEach((inp) => {
       inp.addEventListener("input", (e) => {
-        const idx = Number(e.target.dataset.subIdx);
-        if (!node.subLabels) node.subLabels = [];
-        if (node.subLabels[idx].text === e.target.value) return;
+        const idx = Number(e.target.dataset.labelIdx);
+        const labels = getAllLabels();
+        if (labels[idx].text === e.target.value) return;
         captureHistorySnapshot();
-        node.subLabels[idx].text = e.target.value;
+        labels[idx].text = e.target.value;
+        writeAllLabels(labels);
         render();
       });
     });
-    document.querySelectorAll(".sub-label-right-input").forEach((inp) => {
+
+    // Right-text (description) inputs
+    document.querySelectorAll(".label-right-input").forEach((inp) => {
       inp.addEventListener("input", (e) => {
-        const idx = Number(e.target.dataset.subIdx);
-        if (!node.subLabels) node.subLabels = [];
-        if (node.subLabels[idx].rightText === e.target.value) return;
+        const idx = Number(e.target.dataset.labelIdx);
+        const labels = getAllLabels();
+        if (labels[idx].rightText === e.target.value) return;
         captureHistorySnapshot();
-        node.subLabels[idx].rightText = e.target.value;
+        labels[idx].rightText = e.target.value;
+        writeAllLabels(labels);
         render();
       });
     });
-    document.querySelectorAll(".sub-label-remove").forEach((btn) => {
+
+    // Per-label text color
+    document.querySelectorAll(".label-text-color").forEach((inp) => {
+      inp.addEventListener("input", (e) => {
+        const idx = Number(e.target.dataset.labelIdx);
+        const labels = getAllLabels();
+        captureHistorySnapshot();
+        labels[idx].textColor = e.target.value;
+        writeAllLabels(labels);
+        render();
+      });
+    });
+
+    // Per-label background color
+    document.querySelectorAll(".label-bg-color").forEach((inp) => {
+      inp.addEventListener("input", (e) => {
+        const idx = Number(e.target.dataset.labelIdx);
+        const labels = getAllLabels();
+        if (!labels[idx].bgColor) return;
+        captureHistorySnapshot();
+        labels[idx].bgColor = e.target.value;
+        writeAllLabels(labels);
+        render();
+      });
+    });
+
+    // Per-label background toggle
+    document.querySelectorAll(".label-bg-toggle").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const idx = Number(btn.dataset.subIdx);
+        const idx = Number(btn.dataset.labelIdx);
+        const labels = getAllLabels();
+        const isOn = !labels[idx].bgColor;
         captureHistorySnapshot();
-        node.subLabels.splice(idx, 1);
+        labels[idx].bgColor = isOn ? (isDeliverable ? "#000000" : "#ffffff") : null;
+        writeAllLabels(labels);
         renderSelectionEditor();
         render();
       });
     });
+
+    // Remove label
+    document.querySelectorAll(".sub-label-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.labelIdx);
+        const labels = getAllLabels();
+        if (labels.length <= 1) return;
+        captureHistorySnapshot();
+        labels.splice(idx, 1);
+        writeAllLabels(labels);
+        renderSelectionEditor();
+        render();
+      });
+    });
+
+    // Add label
     const addBtn = document.getElementById("addSubLabel");
     if (addBtn) {
       addBtn.addEventListener("click", () => {
         captureHistorySnapshot();
         if (!node.subLabels) node.subLabels = [];
-        node.subLabels.push({ text: "Deliverable", rightText: "" });
+        node.subLabels.push({ text: "Deliverable", rightText: "", textColor: "#ffffff", bgColor: "#000000" });
         renderSelectionEditor();
         render();
       });
+    }
+
+    // Drag to reorder labels — only from grip handle
+    const container = document.getElementById("labelsContainer");
+    if (container) {
+      let dragIdx = null;
+      // Enable draggable on the card only while grip is held
+      container.querySelectorAll(".sub-label-grip").forEach((grip) => {
+        grip.addEventListener("mousedown", () => {
+          const card = grip.closest(".sub-label-stack");
+          if (card) card.setAttribute("draggable", "true");
+        });
+      });
+      // Remove draggable after drag ends or mouse releases elsewhere
+      const disableDrag = () => {
+        container.querySelectorAll(".sub-label-stack").forEach((c) => c.removeAttribute("draggable"));
+      };
+      container.addEventListener("dragstart", (e) => {
+        const card = e.target.closest(".sub-label-stack[data-label-idx]");
+        if (!card) return;
+        dragIdx = Number(card.dataset.labelIdx);
+        card.classList.add("label-dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+      container.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const card = e.target.closest(".sub-label-stack[data-label-idx]");
+        container.querySelectorAll(".sub-label-stack").forEach((c) => c.classList.remove("label-drag-over"));
+        if (card) card.classList.add("label-drag-over");
+      });
+      container.addEventListener("dragleave", (e) => {
+        const card = e.target.closest(".sub-label-stack[data-label-idx]");
+        if (card) card.classList.remove("label-drag-over");
+      });
+      container.addEventListener("drop", (e) => {
+        e.preventDefault();
+        container.querySelectorAll(".sub-label-stack").forEach((c) => { c.classList.remove("label-drag-over"); c.classList.remove("label-dragging"); });
+        const card = e.target.closest(".sub-label-stack[data-label-idx]");
+        if (!card || dragIdx === null) return;
+        const dropIdx = Number(card.dataset.labelIdx);
+        if (dropIdx === dragIdx) return;
+        captureHistorySnapshot();
+        const labels = getAllLabels();
+        const [moved] = labels.splice(dragIdx, 1);
+        labels.splice(dropIdx, 0, moved);
+        writeAllLabels(labels);
+        renderSelectionEditor();
+        render();
+      });
+      container.addEventListener("dragend", () => {
+        container.querySelectorAll(".sub-label-stack").forEach((c) => { c.classList.remove("label-drag-over"); c.classList.remove("label-dragging"); });
+        disableDrag();
+        dragIdx = null;
+      });
+      document.addEventListener("mouseup", disableDrag);
     }
   }
 
@@ -1822,38 +1979,47 @@ function renderSelectionEditor() {
     render();
   });
   maxWidthSlider.addEventListener("pointerup", () => { maxWidthSnapshotTaken = false; });
-  document.getElementById("editNodeTextColor").addEventListener("input", (event) => {
-    if ((node.labelTextColor || (node.type === "deliverable" ? "#ffffff" : "#000000")) === event.target.value) {
-      return;
-    }
-    captureHistorySnapshot();
-    node.labelTextColor = event.target.value;
-    render();
-  });
-  document.getElementById("editNodeLabelBgColor").addEventListener("input", (event) => {
-    if (!node.labelBgColor) {
-      return;
-    }
-    if (node.labelBgColor === event.target.value) {
-      return;
-    }
-    captureHistorySnapshot();
-    node.labelBgColor = event.target.value;
-    render();
-  });
-  document.getElementById("editNodeLabelBgEnabled").addEventListener("click", (event) => {
-    const isOn = !getNodeLabelStyle(node).bgColor;
-    const nextValue = isOn
-      ? node.labelBgColor || "#000000"
-      : null;
-    if ((node.labelBgColor || null) === nextValue) {
-      return;
-    }
-    captureHistorySnapshot();
-    node.labelBgColor = nextValue;
-    renderSelectionEditor();
-    render();
-  });
+  const textColorEl = document.getElementById("editNodeTextColor");
+  if (textColorEl) {
+    textColorEl.addEventListener("input", (event) => {
+      if ((node.labelTextColor || (node.type === "deliverable" ? "#ffffff" : "#000000")) === event.target.value) {
+        return;
+      }
+      captureHistorySnapshot();
+      node.labelTextColor = event.target.value;
+      render();
+    });
+  }
+  const bgColorEl = document.getElementById("editNodeLabelBgColor");
+  if (bgColorEl) {
+    bgColorEl.addEventListener("input", (event) => {
+      if (!node.labelBgColor) {
+        return;
+      }
+      if (node.labelBgColor === event.target.value) {
+        return;
+      }
+      captureHistorySnapshot();
+      node.labelBgColor = event.target.value;
+      render();
+    });
+  }
+  const bgEnabledEl = document.getElementById("editNodeLabelBgEnabled");
+  if (bgEnabledEl) {
+    bgEnabledEl.addEventListener("click", (event) => {
+      const isOn = !getNodeLabelStyle(node).bgColor;
+      const nextValue = isOn
+        ? node.labelBgColor || "#000000"
+        : null;
+      if ((node.labelBgColor || null) === nextValue) {
+        return;
+      }
+      captureHistorySnapshot();
+      node.labelBgColor = nextValue;
+      renderSelectionEditor();
+      render();
+    });
+  }
   document.getElementById("editNodeStatus").value = node.status;
   document.getElementById("editNodeStatus").addEventListener("change", (event) => {
     if (node.status === event.target.value) {
@@ -3588,34 +3754,36 @@ function renderLabels(){
   labelsLayer.innerHTML="";
   var fs=labelFontSize;
   DATA.nodes.forEach(function(node){
-    var style=getNodeLabelStyle(node);
+    var mainStyle=getNodeLabelStyle(node);
     var mw=node.labelMaxWidth||DEFAULT_LABEL_MAX_WIDTH;
     var rawSubs=node.subLabels||[];
     var subObjs=rawSubs.map(function(s){return typeof s==="string"?{text:s,rightText:""}:s;});
-    var allLabels=[{text:node.label,rightText:node.labelDescription||""}].concat(subObjs);
+    var isDeliv=node.type==="deliverable";
+    var allLabels=[{text:node.label,rightText:node.labelDescription||"",textColor:mainStyle.textColor,bgColor:mainStyle.bgColor}].concat(subObjs.map(function(s){
+      return{text:s.text,rightText:s.rightText||"",textColor:s.textColor||mainStyle.textColor,bgColor:s.bgColor!==undefined?s.bgColor:mainStyle.bgColor};
+    }));
     var labelGap=8;var curY=node.y+22;var entries=[];
     allLabels.forEach(function(entry){
       var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
       fo.setAttribute("x",node.x-mw/2);fo.setAttribute("y",curY);
       fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
       var div=document.createElement("div");
-      div.className="label-wrap"+(node.type==="deliverable"?" label-deliverable":"");
-      div.style.cssText="color:"+style.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
+      div.className="label-wrap"+(isDeliv?" label-deliverable":"");
+      div.style.cssText="color:"+entry.textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:center;";
       div.textContent=entry.text;fo.appendChild(div);labelsLayer.appendChild(fo);
       var actualH=div.offsetHeight||fs*1.4;fo.setAttribute("height",actualH+4);
-      entries.push({fo:fo,y:curY,h:actualH,rightText:entry.rightText});
+      entries.push({fo:fo,y:curY,h:actualH,rightText:entry.rightText,bgColor:entry.bgColor});
       curY+=actualH+6+labelGap;
     });
-    if(style.bgColor){
-      entries.forEach(function(entry){
-        var rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
-        rect.classList.add("label-bg");
-        rect.setAttribute("x",node.x-mw/2-6);rect.setAttribute("y",entry.y-3);
-        rect.setAttribute("width",mw+12);rect.setAttribute("height",entry.h+10);
-        rect.setAttribute("fill",style.bgColor);
-        labelsLayer.insertBefore(rect,entry.fo);
-      });
-    }
+    entries.forEach(function(entry){
+      if(!entry.bgColor)return;
+      var rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
+      rect.classList.add("label-bg");
+      rect.setAttribute("x",node.x-mw/2-6);rect.setAttribute("y",entry.y-3);
+      rect.setAttribute("width",mw+12);rect.setAttribute("height",entry.h+10);
+      rect.setAttribute("fill",entry.bgColor);
+      labelsLayer.insertBefore(rect,entry.fo);
+    });
     entries.forEach(function(entry){
       if(!entry.rightText)return;
       var rfo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
