@@ -1781,10 +1781,13 @@ function renderSelectionEditor() {
           <svg width="16" height="16" viewBox="0 0 16 16"><rect x="5" y="2" width="10" height="2" fill="currentColor"/><rect x="1" y="6" width="14" height="2" fill="currentColor"/><rect x="7" y="10" width="8" height="2" fill="currentColor"/><rect x="3" y="14" width="12" height="2" fill="currentColor"/></svg>
         </button>
       </div>
-      <label>Text Color <input id="editTLTextColor" type="color" value="${tl.textColor || "#ffffff"}" /></label>
-      <div class="editor-row">
-        <label class="editor-row-field">Background <input id="editTLBgColor" type="color" value="${tl.bgColor || "#000000"}" ${hasBg ? "" : "disabled"} /></label>
-        <button id="editTLBgEnabled" class="toggle-btn${hasBg ? " active" : ""}">${hasBg ? "On" : "Off"}</button>
+      <div class="sub-label-color-section">
+        <span class="sub-label-color-heading">Primary Color</span>
+        <input id="editTLTextColor" type="color" class="sub-label-color-input" value="${tl.textColor || "#ffffff"}" />
+      </div>
+      <div class="sub-label-color-section">
+        <span class="sub-label-color-heading">Secondary Color <button type="button" id="editTLBgEnabled" class="label-bg-toggle" title="${hasBg ? "Disable" : "Enable"}"><span class="bg-toggle-track${hasBg ? " on" : ""}"><span class="bg-toggle-thumb"></span></span></button></span>
+        <input id="editTLBgColor" type="color" class="sub-label-color-input${hasBg ? "" : " color-disabled"}" value="${tl.bgColor || "#000000"}" ${hasBg ? "" : "disabled"} />
       </div>
     `;
 
@@ -1819,9 +1822,8 @@ function renderSelectionEditor() {
       captureHistorySnapshot(); tl.bgColor = e.target.value; render();
     });
     document.getElementById("editTLBgEnabled").addEventListener("click", () => {
-      const isOn = !tl.bgColor;
       captureHistorySnapshot();
-      tl.bgColor = isOn ? (tl.bgColor || "#000000") : null;
+      tl.bgColor = tl.bgColor ? null : "#000000";
       renderSelectionEditor();
       render();
     });
@@ -1930,15 +1932,6 @@ function renderSelectionEditor() {
     <label class="range-label">Label Max Width <span id="editNodeMaxWidthVal">${nodeMaxW}px</span>
       <input id="editNodeMaxWidth" type="range" min="40" max="400" step="10" value="${nodeMaxW}" />
     </label>
-    ${isDeliverable ? "" : `
-    <div class="sub-label-color-section">
-      <span class="sub-label-color-heading">Primary Color</span>
-      <input id="editNodeTextColor" type="color" class="sub-label-color-input" value="${getNodeLabelStyle(node).textColor}" />
-    </div>
-    <div class="sub-label-color-section">
-      <span class="sub-label-color-heading">Secondary Color <button type="button" id="editNodeLabelBgEnabled" class="label-bg-toggle" title="${getNodeLabelStyle(node).bgColor ? "Disable" : "Enable"}"><span class="bg-toggle-track${getNodeLabelStyle(node).bgColor ? " on" : ""}"><span class="bg-toggle-thumb"></span></span></button></span>
-      <input id="editNodeLabelBgColor" type="color" class="sub-label-color-input${getNodeLabelStyle(node).bgColor ? "" : " color-disabled"}" value="${(getNodeLabelStyle(node).bgColor || "#ffffff")}" ${getNodeLabelStyle(node).bgColor ? "" : "disabled"} />
-    </div>`}
     <label>Status
       <select id="editNodeStatus">
         <option value="planned">Planned Activity</option>
@@ -1950,6 +1943,15 @@ function renderSelectionEditor() {
     <label>Stream
       <select id="editNodeStream"></select>
     </label>
+    ${isDeliverable ? "" : `
+    <div class="sub-label-color-section">
+      <span class="sub-label-color-heading">Primary Color</span>
+      <input id="editNodeTextColor" type="color" class="sub-label-color-input" value="${getNodeLabelStyle(node).textColor}" />
+    </div>
+    <div class="sub-label-color-section">
+      <span class="sub-label-color-heading">Secondary Color <button type="button" id="editNodeLabelBgEnabled" class="label-bg-toggle" title="${getNodeLabelStyle(node).bgColor ? "Disable" : "Enable"}"><span class="bg-toggle-track${getNodeLabelStyle(node).bgColor ? " on" : ""}"><span class="bg-toggle-thumb"></span></span></button></span>
+      <input id="editNodeLabelBgColor" type="color" class="sub-label-color-input${getNodeLabelStyle(node).bgColor ? "" : " color-disabled"}" value="${(getNodeLabelStyle(node).bgColor || "#ffffff")}" ${getNodeLabelStyle(node).bgColor ? "" : "disabled"} />
+    </div>`}
   `;
 
   // --- Activity label input ---
