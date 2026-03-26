@@ -4370,11 +4370,18 @@ function showCanvasContextMenu(event) {
   contextMenuPoint = svgPointFromEvent(event);
 
   // Clean up previous dynamic entries
-  canvasContextMenu.querySelectorAll("[data-action='delete-guide'], .ctx-separator, [data-action^='set-status-']").forEach((el) => el.remove());
+  canvasContextMenu.querySelectorAll("[data-action='delete-guide'], [data-action='delete-element'], .ctx-separator, [data-action^='set-status-']").forEach((el) => el.remove());
   contextMenuNodeId = null;
+  canvasContextMenu._deleteTarget = null;
+
+  // Detect what element was right-clicked
+  const nodeG = event.target.closest("g[data-node-id]");
+  const streamLine = event.target.closest("[data-stream-id]");
+  const connEl = event.target.closest("[data-connection-id]");
+  const textLabelG = event.target.closest("g[data-text-label-id]");
+  const guideHit = event.target.closest(".guide-hit");
 
   // If right-clicked on a node, add status change options
-  const nodeG = event.target.closest("g[data-node-id]");
   if (nodeG) {
     contextMenuNodeId = nodeG.dataset.nodeId;
     const node = state.nodes.find((n) => n.id === contextMenuNodeId);
@@ -4405,15 +4412,52 @@ function showCanvasContextMenu(event) {
     }
   }
 
-  // If right-clicked on a guide, add a delete option
-  const guideHit = event.target.closest(".guide-hit");
+  // Determine delete target (priority: node > connection > text-label > stream > guide)
+  let deleteLabel = null;
+  if (nodeG) {
+    canvasContextMenu._deleteTarget = { type: "node", id: nodeG.dataset.nodeId };
+    deleteLabel = "Delete Node";
+  } else if (connEl) {
+    canvasContextMenu._deleteTarget = { type: "connection", id: connEl.dataset.connectionId };
+    deleteLabel = "Delete Connection";
+  } else if (textLabelG) {
+    canvasContextMenu._deleteTarget = { type: "text-label", id: textLabelG.dataset.textLabelId };
+    deleteLabel = "Delete Text Label";
+  } else if (streamLine) {
+    const clickedStreamId = streamLine.dataset.streamId;
+    const groupIds = getSelectedStreamGroup();
+    if (groupIds.size > 1 && groupIds.has(clickedStreamId)) {
+      canvasContextMenu._deleteTarget = { type: "stream-group", ids: [...groupIds] };
+      deleteLabel = "Delete Stream";
+    } else {
+      canvasContextMenu._deleteTarget = { type: "stream", id: clickedStreamId };
+      deleteLabel = "Delete Stream Segment";
+    }
+  } else if (guideHit) {
+    canvasContextMenu._deleteTarget = { type: "guide", id: guideHit.dataset.guideId };
+    deleteLabel = "Delete Guide";
+  }
 
+  if (deleteLabel) {
+    const sep = document.createElement("div");
+    sep.className = "ctx-separator";
+    canvasContextMenu.appendChild(sep);
+
+    const delBtn = document.createElement("button");
+    delBtn.dataset.action = "delete-element";
+    delBtn.textContent = deleteLabel;
+    delBtn.className = "danger";
+    canvasContextMenu.appendChild(delBtn);
+  }
+
+  // Legacy: If right-clicked on a guide, also keep the old delete-guide action
   if (guideHit) {
     const delBtn = document.createElement("button");
     delBtn.dataset.action = "delete-guide";
     delBtn.dataset.guideId = guideHit.dataset.guideId;
     delBtn.textContent = "Delete Guide";
     delBtn.className = "danger";
+    delBtn.style.display = "none";
     canvasContextMenu.appendChild(delBtn);
   }
 }
@@ -4548,6 +4592,46 @@ function initEvents() {
     if (action === "add-guide-v") addGuide("v");
     else if (action === "add-guide-h") addGuide("h");
     else if (action === "delete-guide") deleteGuide(btn.dataset.guideId);
+    else if (action === "delete-element" && canvasContextMenu._deleteTarget) {
+      const target = canvasContextMenu._deleteTarget;
+      captureHistorySnapshot();
+      if (target.type === "node") {
+        state.nodes = state.nodes.filter((n) => n.id !== target.id);
+        state.connections = state.connections.filter(
+          (c) => c.fromNodeId !== target.id && c.toNodeId !== target.id,
+        );
+      } else if (target.type === "stream") {
+        const nodesOnStream = state.nodes.filter((n) => n.streamId === target.id);
+        const nodeIds = new Set(nodesOnStream.map((n) => n.id));
+        state.streams = state.streams.filter((s) => s.id !== target.id);
+        state.nodes = state.nodes.filter((n) => n.streamId !== target.id);
+        state.connections = state.connections.filter(
+          (c) => !nodeIds.has(c.fromNodeId) && !nodeIds.has(c.toNodeId),
+        );
+      } else if (target.type === "stream-group") {
+        const idsToRemove = new Set(target.ids);
+        const allNodeIds = new Set();
+        idsToRemove.forEach((sid) => {
+          state.nodes.filter((n) => n.streamId === sid).forEach((n) => allNodeIds.add(n.id));
+        });
+        state.streams = state.streams.filter((s) => !idsToRemove.has(s.id));
+        state.nodes = state.nodes.filter((n) => !allNodeIds.has(n.id));
+        state.connections = state.connections.filter(
+          (c) => !allNodeIds.has(c.fromNodeId) && !allNodeIds.has(c.toNodeId),
+        );
+      } else if (target.type === "connection") {
+        state.connections = state.connections.filter((c) => c.id !== target.id);
+      } else if (target.type === "text-label") {
+        state.textLabels = state.textLabels.filter((t) => t.id !== target.id);
+      } else if (target.type === "guide") {
+        deleteGuide(target.id);
+      }
+      clearSelection();
+      syncStreamPresetDropdown();
+      applyStreamPreset();
+      render();
+      renderSelectionEditor();
+    }
     else if (action.startsWith("set-status-") && contextMenuNodeId) {
       const newStatus = action.replace("set-status-", "");
       const node = state.nodes.find((n) => n.id === contextMenuNodeId);
