@@ -2988,11 +2988,25 @@ function getContentBounds() {
       const estWidth = longestLen * (labelFontSize * 0.6);
       points.push({ x: n.x + mw / 2 + 10 + estWidth, y: n.y });
     }
+    // Account for vertical extent of stacked labels below the node
+    const labelCount = 1 + subs.length;
+    const estLineH = labelFontSize * 1.4;
+    const labelGap = 8;
+    // Each label: text height (~estLineH) + 6px spacing + gap; starts 22px below node
+    // For wrapped text, estimate ~2 lines per label as conservative bound
+    const estLabelH = 22 + labelCount * (estLineH * 2 + 6 + labelGap);
+    points.push({ x: n.x, y: n.y + estLabelH });
   });
   state.textLabels.forEach((tl) => {
     const mw = tl.maxWidth || 160;
+    const fs = tl.fontSize || 16;
     points.push({ x: tl.x - mw / 2, y: tl.y });
     points.push({ x: tl.x + mw / 2, y: tl.y });
+    // Estimate text label height: wrap text and add height
+    const text = tl.text || "";
+    const charsPerLine = Math.max(1, Math.floor(mw / (fs * 0.6)));
+    const estLines = Math.max(1, Math.ceil(text.length / charsPerLine));
+    points.push({ x: tl.x, y: tl.y + estLines * fs * 1.4 });
   });
   if (points.length === 0) return { x: 0, y: 0, w: 1600, h: 1000 };
 
@@ -3965,8 +3979,26 @@ var contentBounds=null;
 function getContentBounds(){
   var pts=[];
   DATA.streams.forEach(function(s){s.points.forEach(function(p){pts.push(p);});});
-  DATA.nodes.forEach(function(n){pts.push({x:n.x,y:n.y});});
-  DATA.textLabels.forEach(function(tl){pts.push({x:tl.x,y:tl.y});});
+  DATA.nodes.forEach(function(n){
+    pts.push({x:n.x,y:n.y});
+    var mw=n.labelMaxWidth||DEFAULT_LABEL_MAX_WIDTH;
+    pts.push({x:n.x-mw/2,y:n.y});
+    pts.push({x:n.x+mw/2,y:n.y});
+    var subs=n.subLabels||[];
+    var labelCount=1+subs.length;
+    var estLineH=labelFontSize*1.4;
+    var estLabelH=22+labelCount*(estLineH*2+6+8);
+    pts.push({x:n.x,y:n.y+estLabelH});
+  });
+  DATA.textLabels.forEach(function(tl){
+    var mw=tl.maxWidth||160;var fs=tl.fontSize||16;
+    pts.push({x:tl.x-mw/2,y:tl.y});
+    pts.push({x:tl.x+mw/2,y:tl.y});
+    var text=tl.text||"";
+    var charsPerLine=Math.max(1,Math.floor(mw/(fs*0.6)));
+    var estLines=Math.max(1,Math.ceil(text.length/charsPerLine));
+    pts.push({x:tl.x,y:tl.y+estLines*fs*1.4});
+  });
   if(pts.length===0)return{x:0,y:0,w:1600,h:1000};
   var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   pts.forEach(function(p){if(p.x<minX)minX=p.x;if(p.y<minY)minY=p.y;if(p.x>maxX)maxX=p.x;if(p.y>maxY)maxY=p.y;});
