@@ -2214,24 +2214,43 @@ function renderSelectionEditor() {
   });
 
   const streamSelect = document.getElementById("editNodeStream");
+  const seenNames = new Map();
   state.streams.forEach((stream) => {
-    const option = document.createElement("option");
-    option.value = stream.id;
-    option.textContent = stream.name;
-    streamSelect.appendChild(option);
+    const nameKey = stream.name.trim().toLowerCase();
+    if (!seenNames.has(nameKey)) {
+      seenNames.set(nameKey, stream.name);
+      const option = document.createElement("option");
+      option.value = nameKey;
+      option.textContent = stream.name;
+      streamSelect.appendChild(option);
+    }
   });
-  streamSelect.value = node.streamId;
+  const currentStream = getStreamById(node.streamId);
+  streamSelect.value = currentStream ? currentStream.name.trim().toLowerCase() : "";
   streamSelect.addEventListener("change", (event) => {
-    if (node.streamId === event.target.value) {
-      return;
-    }
+    const selectedNameKey = event.target.value;
+    const matchingStreams = state.streams.filter(
+      (s) => s.name.trim().toLowerCase() === selectedNameKey
+    );
+    if (matchingStreams.length === 0) return;
+
+    // Pick the nearest segment to the node's current position
+    let bestStream = matchingStreams[0];
+    let bestDistSq = Infinity;
+    matchingStreams.forEach((s) => {
+      const nearest = nearestPointOnStream({ x: node.x, y: node.y }, s);
+      if (nearest) {
+        const dSq = (nearest.x - node.x) ** 2 + (nearest.y - node.y) ** 2;
+        if (dSq < bestDistSq) { bestDistSq = dSq; bestStream = s; }
+      }
+    });
+
+    if (node.streamId === bestStream.id) return;
     captureHistorySnapshot();
-    node.streamId = event.target.value;
-    if (node.streamId) {
-      const constrained = constrainActivityToStream({ x: node.x, y: node.y }, node.streamId);
-      node.x = constrained.x;
-      node.y = constrained.y;
-    }
+    node.streamId = bestStream.id;
+    const constrained = constrainActivityToStream({ x: node.x, y: node.y }, node.streamId);
+    node.x = constrained.x;
+    node.y = constrained.y;
     render();
   });
 }
