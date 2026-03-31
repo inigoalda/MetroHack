@@ -2871,7 +2871,11 @@ function finishInteraction() {
 
       const stream = createStream({ name, color, points: [start, end] });
       syncStreamPresetDropdown();
-      streamPresetSelect.value = stream.id;
+      // Select the dropdown option matching this stream's color (deduplicated by color)
+      const matchOpt = [...streamPresetSelect.options].find(
+        (o) => o.value !== "__new__" && getStreamById(o.value) && normalizeColor(getStreamById(o.value).color) === normalizeColor(stream.color)
+      );
+      if (matchOpt) streamPresetSelect.value = matchOpt.value;
       applyStreamPreset();
     }
   }
