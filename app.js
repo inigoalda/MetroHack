@@ -53,6 +53,7 @@ let snapEnabled = true;
 let labelFontSize = 14;
 let activityRadius = 12;
 let deliverableRadius = 11;
+let legendLayout = "vertical";
 
 const STATUS_COLORS = {
   planned: "#ffffff",
@@ -60,6 +61,33 @@ const STATUS_COLORS = {
   ongoing: "#FFCD00",
   attention: "#ED8B00",
 };
+
+const DEFAULT_STATUS_CONFIG = [
+  { key: "planned", label: "Planned Activity", color: "#ffffff" },
+  { key: "completed", label: "Completed", color: "#92D050" },
+  { key: "ongoing", label: "On-going", color: "#FFCD00" },
+  { key: "attention", label: "Needs Attention", color: "#ED8B00" },
+];
+
+function getStatusConfig() {
+  return state.statusConfig && state.statusConfig.length
+    ? state.statusConfig
+    : DEFAULT_STATUS_CONFIG;
+}
+
+function getStatusColor(key) {
+  const cfg = getStatusConfig();
+  const entry = cfg.find((s) => s.key === key);
+  return entry ? entry.color : (STATUS_COLORS[key] || STATUS_COLORS.planned);
+}
+
+function getStatusLabel(key) {
+  const cfg = getStatusConfig();
+  const entry = cfg.find((s) => s.key === key);
+  if (entry) return entry.label;
+  const defaults = { planned: "Planned Activity", completed: "Completed", ongoing: "On-going", attention: "Needs Attention" };
+  return defaults[key] || key;
+}
 
 const DEFAULT_LABEL_MAX_WIDTH = 120;
 const DEFAULT_MONTH_WIDTH = 1500;
@@ -84,6 +112,7 @@ const state = {
   connections: [],
   guides: [],
   textLabels: [],
+  statusConfig: cloneData(DEFAULT_STATUS_CONFIG),
   calendar: {
     monthWidths: {},
     refYear: new Date().getFullYear(),
@@ -137,6 +166,7 @@ function buildSnapshot() {
     connections: cloneData(state.connections),
     guides: cloneData(state.guides),
     textLabels: cloneData(state.textLabels),
+    statusConfig: cloneData(state.statusConfig),
     calendar: cloneData(state.calendar),
     selected: cloneData(state.selected),
     selectionGrouped: state.selectionGrouped,
@@ -167,13 +197,17 @@ function restoreFromSnapshot(snapshot) {
   state.connections = cloneData(snapshot.connections || []);
   state.guides = cloneData(snapshot.guides || []);
   state.textLabels = cloneData(snapshot.textLabels || []);
+  state.statusConfig = snapshot.statusConfig
+    ? cloneData(snapshot.statusConfig)
+    : cloneData(DEFAULT_STATUS_CONFIG);
   if (snapshot.calendar) {
     state.calendar = cloneData(snapshot.calendar);
   }
   state.selected = cloneData(snapshot.selected || []);
   state.selectionGrouped = !!snapshot.selectionGrouped;
 
-
+  applyStatusCssVars();
+  renderStatusConfigEditor();
   renderSelectionEditor();
   render();
 }
@@ -949,6 +983,7 @@ function render() {
   renderLabels();
   renderPreview();
   renderLegend();
+  renderStatusLegend();
   applyViewportTransform();
   renderCalendar();
 }
@@ -1265,7 +1300,7 @@ function renderNodes() {
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.dataset.nodeId = node.id;
 
-    const fill = STATUS_COLORS[node.status] || STATUS_COLORS.planned;
+    const fill = getStatusColor(node.status);
 
     if (node.type === "activity") {
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1692,6 +1727,96 @@ function renderLegend() {
   });
 }
 
+function renderStatusLegend() {
+  const ul = document.getElementById("statusLegend");
+  if (!ul) return;
+  ul.innerHTML = "";
+  const cfg = getStatusConfig();
+  cfg.forEach((s) => {
+    const li = document.createElement("li");
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = s.color;
+    li.appendChild(dot);
+    li.appendChild(document.createTextNode(" " + s.label));
+    ul.appendChild(li);
+  });
+  // Deliverable entry (always present)
+  const dli = document.createElement("li");
+  const diamond = document.createElement("span");
+  diamond.className = "diamond";
+  dli.appendChild(diamond);
+  dli.appendChild(document.createTextNode(" Deliverable"));
+  ul.appendChild(dli);
+}
+
+function renderStatusConfigEditor() {
+  const container = document.getElementById("statusConfigEditor");
+  if (!container) return;
+  container.innerHTML = "";
+  const cfg = getStatusConfig();
+  cfg.forEach((s, idx) => {
+    const row = document.createElement("div");
+    row.className = "status-config-row";
+
+    const colorWrap = document.createElement("div");
+    colorWrap.className = "status-config-color-wrap";
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = s.color;
+    colorInput.title = "Status color";
+
+    const hexSpan = document.createElement("span");
+    hexSpan.className = "status-config-hex";
+    hexSpan.textContent = s.color.toUpperCase();
+
+    colorInput.addEventListener("input", () => {
+      state.statusConfig[idx].color = colorInput.value;
+      hexSpan.textContent = colorInput.value.toUpperCase();
+      applyStatusCssVars();
+      render();
+      renderStatusLegend();
+    });
+
+    colorWrap.appendChild(colorInput);
+    colorWrap.appendChild(hexSpan);
+
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.value = s.label;
+    labelInput.placeholder = s.key;
+    labelInput.addEventListener("input", () => {
+      state.statusConfig[idx].label = labelInput.value;
+      renderStatusLegend();
+      renderSelectionEditor();
+    });
+
+    row.appendChild(colorWrap);
+    row.appendChild(labelInput);
+    container.appendChild(row);
+  });
+}
+
+function applyLegendLayout() {
+  const card = document.getElementById("legendCard");
+  if (!card) return;
+  card.classList.toggle("legend-horizontal", legendLayout === "horizontal");
+}
+
+function syncLegendLayoutToggle() {
+  const btns = document.querySelectorAll("#legendLayoutToggle .layout-btn");
+  btns.forEach((b) => b.classList.toggle("active", b.dataset.layout === legendLayout));
+}
+
+function applyStatusCssVars() {
+  const cfg = getStatusConfig();
+  const root = document.documentElement;
+  cfg.forEach((s) => {
+    root.style.setProperty("--" + s.key, s.color);
+  });
+}
+
 function renderSelectionEditor() {
   if (state.selected.length === 0) {
     selectionEditor.className = "selection-editor muted";
@@ -1939,10 +2064,7 @@ function renderSelectionEditor() {
     </label>
     <label>Status
       <select id="editNodeStatus">
-        <option value="planned">Planned Activity</option>
-        <option value="completed">Completed</option>
-        <option value="ongoing">On-going</option>
-        <option value="attention">Needs Attention</option>
+        ${getStatusConfig().map((s) => `<option value="${s.key}">${escapeHtml(s.label)}</option>`).join("")}
       </select>
     </label>
     <label>Stream
@@ -3169,10 +3291,12 @@ function saveMap() {
     connections: cloneData(state.connections),
     guides: cloneData(state.guides),
     textLabels: cloneData(state.textLabels),
+    statusConfig: cloneData(state.statusConfig),
     calendar: cloneData(state.calendar),
     labelFontSize: labelFontSize,
     activityRadius: activityRadius,
     deliverableRadius: deliverableRadius,
+    legendLayout: legendLayout,
   };
   downloadBlob(
     new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
@@ -3196,6 +3320,9 @@ function loadMap(file) {
       state.connections = Array.isArray(data.connections) ? data.connections : [];
       state.guides = Array.isArray(data.guides) ? data.guides : [];
       state.textLabels = Array.isArray(data.textLabels) ? data.textLabels : [];
+      state.statusConfig = Array.isArray(data.statusConfig) && data.statusConfig.length
+        ? data.statusConfig
+        : cloneData(DEFAULT_STATUS_CONFIG);
       if (data.calendar && typeof data.calendar === "object") {
         state.calendar.monthWidths = data.calendar.monthWidths || {};
         if (typeof data.calendar.refYear === "number") state.calendar.refYear = data.calendar.refYear;
@@ -3209,7 +3336,12 @@ function loadMap(file) {
       deliverableRadius = typeof data.deliverableRadius === "number" ? data.deliverableRadius : 11;
       document.getElementById("deliverableRadius").value = deliverableRadius;
       document.getElementById("deliverableRadiusValue").textContent = deliverableRadius;
+      legendLayout = data.legendLayout === "horizontal" ? "horizontal" : "vertical";
       clearSelection();
+      applyStatusCssVars();
+      renderStatusConfigEditor();
+      applyLegendLayout();
+      syncLegendLayoutToggle();
       render();
       syncStreamPresetDropdown();
       fitToView();
@@ -3472,11 +3604,9 @@ function exportPng() {
 function buildLegendSvgString() {
   const ns = "http://www.w3.org/2000/svg";
 
+  const cfg = getStatusConfig();
   const statusItems = [
-    { label: "Planned Activity", color: "#ffffff", shape: "circle" },
-    { label: "Completed", color: "#3dd86f", shape: "circle" },
-    { label: "On-going", color: "#f0a13d", shape: "circle" },
-    { label: "Needs Attention", color: "#c26700", shape: "circle" },
+    ...cfg.map((s) => ({ label: s.label, color: s.color, shape: "circle" })),
     { label: "Deliverable", color: "#f4d87a", shape: "diamond" },
   ];
 
@@ -3491,114 +3621,109 @@ function buildLegendSvgString() {
   const headerH = 26;
   const fontSize = 13;
   const headerFontSize = 11;
+  const colW = textX + 180 + pad;
 
-  let totalH = pad + headerH + statusItems.length * lineH;
-  if (streamItems.length > 0) totalH += sectionGap + headerH + streamItems.length * lineH;
-  totalH += pad;
+  const isHorizontal = legendLayout === "horizontal";
 
-  const textW = 180;
-  const totalW = textX + textW + pad;
-
-  const root = document.createElementNS(ns, "svg");
-  root.setAttribute("xmlns", ns);
-  root.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
-  root.setAttribute("width", totalW);
-  root.setAttribute("height", totalH);
-
-  const styleEl = document.createElementNS(ns, "style");
-  styleEl.textContent = `@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');`;
-  root.appendChild(styleEl);
-
-  let cy = pad;
-
-  // Header: Stop Status
-  const h1 = document.createElementNS(ns, "text");
-  h1.setAttribute("x", pad);
-  h1.setAttribute("y", cy);
-  h1.setAttribute("fill", "#8fa6be");
-  h1.setAttribute("font-family", "'Open Sans', sans-serif");
-  h1.setAttribute("font-size", headerFontSize);
-  h1.setAttribute("font-weight", "600");
-  h1.setAttribute("dominant-baseline", "hanging");
-  h1.textContent = "STOP STATUS";
-  root.appendChild(h1);
-  cy += headerH;
-
-  statusItems.forEach((item) => {
-    const iy = cy + lineH / 2;
-    if (item.shape === "circle") {
-      const c = document.createElementNS(ns, "circle");
-      c.setAttribute("cx", pad + dotR);
-      c.setAttribute("cy", iy);
-      c.setAttribute("r", dotR);
-      c.setAttribute("fill", item.color);
-      c.setAttribute("stroke", "rgba(0,0,0,0.25)");
-      c.setAttribute("stroke-width", "1");
-      root.appendChild(c);
-    } else {
-      const d = document.createElementNS(ns, "rect");
-      const s = dotR * 1.2;
-      d.setAttribute("x", pad + dotR - s / 2);
-      d.setAttribute("y", iy - s / 2);
-      d.setAttribute("width", s);
-      d.setAttribute("height", s);
-      d.setAttribute("fill", item.color);
-      d.setAttribute("stroke", "rgba(0,0,0,0.25)");
-      d.setAttribute("stroke-width", "1");
-      d.setAttribute("transform", `rotate(45 ${pad + dotR} ${iy})`);
-      root.appendChild(d);
-    }
-    const t = document.createElementNS(ns, "text");
-    t.setAttribute("x", textX);
-    t.setAttribute("y", iy);
-    t.setAttribute("fill", "#1a1a1a");
-    t.setAttribute("font-family", "'Open Sans', sans-serif");
-    t.setAttribute("font-size", fontSize);
-    t.setAttribute("dominant-baseline", "central");
-    t.textContent = item.label;
-    root.appendChild(t);
-    cy += lineH;
-  });
-
-  if (streamItems.length > 0) {
-    cy += sectionGap;
-    const h2 = document.createElementNS(ns, "text");
-    h2.setAttribute("x", pad);
-    h2.setAttribute("y", cy);
-    h2.setAttribute("fill", "#8fa6be");
-    h2.setAttribute("font-family", "'Open Sans', sans-serif");
-    h2.setAttribute("font-size", headerFontSize);
-    h2.setAttribute("font-weight", "600");
-    h2.setAttribute("dominant-baseline", "hanging");
-    h2.textContent = "STREAM COLORS";
-    root.appendChild(h2);
+  function renderColumn(items, headerText, offsetX, offsetY) {
+    const els = [];
+    let cy = offsetY;
+    const h = document.createElementNS(ns, "text");
+    h.setAttribute("x", offsetX + pad);
+    h.setAttribute("y", cy);
+    h.setAttribute("fill", "#8fa6be");
+    h.setAttribute("font-family", "'Open Sans', sans-serif");
+    h.setAttribute("font-size", headerFontSize);
+    h.setAttribute("font-weight", "600");
+    h.setAttribute("dominant-baseline", "hanging");
+    h.textContent = headerText;
+    els.push(h);
     cy += headerH;
 
-    streamItems.forEach((item) => {
+    items.forEach((item) => {
       const iy = cy + lineH / 2;
-      const c = document.createElementNS(ns, "circle");
-      c.setAttribute("cx", pad + dotR);
-      c.setAttribute("cy", iy);
-      c.setAttribute("r", dotR);
-      c.setAttribute("fill", item.color);
-      c.setAttribute("stroke", "rgba(0,0,0,0.25)");
-      c.setAttribute("stroke-width", "1");
-      root.appendChild(c);
-
+      if (item.shape === "circle") {
+        const c = document.createElementNS(ns, "circle");
+        c.setAttribute("cx", offsetX + pad + dotR);
+        c.setAttribute("cy", iy);
+        c.setAttribute("r", dotR);
+        c.setAttribute("fill", item.color);
+        c.setAttribute("stroke", "rgba(0,0,0,0.25)");
+        c.setAttribute("stroke-width", "1");
+        els.push(c);
+      } else if (item.shape === "diamond") {
+        const d = document.createElementNS(ns, "rect");
+        const s = dotR * 1.2;
+        d.setAttribute("x", offsetX + pad + dotR - s / 2);
+        d.setAttribute("y", iy - s / 2);
+        d.setAttribute("width", s);
+        d.setAttribute("height", s);
+        d.setAttribute("fill", item.color);
+        d.setAttribute("stroke", "rgba(0,0,0,0.25)");
+        d.setAttribute("stroke-width", "1");
+        d.setAttribute("transform", `rotate(45 ${offsetX + pad + dotR} ${iy})`);
+        els.push(d);
+      }
       const t = document.createElementNS(ns, "text");
-      t.setAttribute("x", textX);
+      t.setAttribute("x", offsetX + textX);
       t.setAttribute("y", iy);
       t.setAttribute("fill", "#1a1a1a");
       t.setAttribute("font-family", "'Open Sans', sans-serif");
       t.setAttribute("font-size", fontSize);
       t.setAttribute("dominant-baseline", "central");
       t.textContent = item.label;
-      root.appendChild(t);
+      els.push(t);
       cy += lineH;
     });
+
+    return { els, endY: cy };
   }
 
-  return new XMLSerializer().serializeToString(root);
+  let totalW, totalH;
+  const statusCol = renderColumn(statusItems, "STOP STATUS", 0, pad);
+  const streamCircleItems = streamItems.map((s) => ({ ...s, shape: "circle" }));
+
+  if (isHorizontal) {
+    const streamCol = streamItems.length > 0
+      ? renderColumn(streamCircleItems, "STREAM COLORS", colW, pad)
+      : { els: [], endY: pad };
+    totalH = Math.max(statusCol.endY, streamCol.endY) + pad;
+    totalW = streamItems.length > 0 ? colW * 2 : colW;
+
+    const root = document.createElementNS(ns, "svg");
+    root.setAttribute("xmlns", ns);
+    root.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
+    root.setAttribute("width", totalW);
+    root.setAttribute("height", totalH);
+    const styleEl = document.createElementNS(ns, "style");
+    styleEl.textContent = `@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');`;
+    root.appendChild(styleEl);
+    statusCol.els.forEach((el) => root.appendChild(el));
+    streamCol.els.forEach((el) => root.appendChild(el));
+    return new XMLSerializer().serializeToString(root);
+  } else {
+    let cy = statusCol.endY;
+    const allEls = [...statusCol.els];
+    if (streamItems.length > 0) {
+      cy += sectionGap;
+      const streamCol = renderColumn(streamCircleItems, "STREAM COLORS", 0, cy);
+      allEls.push(...streamCol.els);
+      cy = streamCol.endY;
+    }
+    totalH = cy + pad;
+    totalW = colW;
+
+    const root = document.createElementNS(ns, "svg");
+    root.setAttribute("xmlns", ns);
+    root.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
+    root.setAttribute("width", totalW);
+    root.setAttribute("height", totalH);
+    const styleEl = document.createElementNS(ns, "style");
+    styleEl.textContent = `@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');`;
+    root.appendChild(styleEl);
+    allEls.forEach((el) => root.appendChild(el));
+    return new XMLSerializer().serializeToString(root);
+  }
 }
 
 function exportLegendSvg() {
@@ -3643,6 +3768,7 @@ function exportViewer() {
     nodes: cloneData(state.nodes),
     connections: cloneData(state.connections),
     textLabels: cloneData(state.textLabels),
+    statusConfig: cloneData(state.statusConfig),
     calendar: cloneData(state.calendar),
     labelFontSize: labelFontSize,
     activityRadius: activityRadius,
@@ -3748,15 +3874,14 @@ svg{width:100%;height:100%;display:block;}
 .legend-card{position:absolute;right:14px;bottom:14px;width:230px;border-radius:14px;
   border:1px solid var(--line-faint);background:var(--legend-bg);backdrop-filter:blur(8px);padding:12px;
   z-index:3;max-height:60vh;overflow-y:auto;}
+.legend-card.legend-horizontal{width:auto;}
+.legend-card.legend-horizontal .legend-body{display:flex;gap:24px;align-items:flex-start;}
+.legend-card.legend-horizontal .legend-section{min-width:0;}
 .legend-card h3{margin:0 0 9px;font-size:0.95rem;}
 .legend-title{margin:8px 0 4px;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-muted);}
 .legend-card ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;}
 .legend-card li{display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-strong);}
 .dot,.legend-stream-color{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,0.5);flex-shrink:0;}
-.dot.planned{background:var(--planned);}
-.dot.completed{background:var(--completed);}
-.dot.ongoing{background:var(--ongoing);}
-.dot.attention{background:var(--attention);}
 .diamond{width:12px;height:12px;transform:rotate(45deg);border:2px solid #53565A;background:rgba(83,86,90,0.2);flex-shrink:0;}
 
 /* Tooltip */
@@ -3816,18 +3941,18 @@ svg{width:100%;height:100%;display:block;}
     <div class="minimap-viewport" id="minimapViewport"></div>
   </div>
 
-  <div class="legend-card">
+  <div class="legend-card${legendLayout === "horizontal" ? " legend-horizontal" : ""}">
     <h3>Legend</h3>
-    <p class="legend-title">Stop Status</p>
-    <ul>
-      <li><span class="dot planned"></span> Planned Activity</li>
-      <li><span class="dot completed"></span> Completed</li>
-      <li><span class="dot ongoing"></span> On-going</li>
-      <li><span class="dot attention"></span> Needs Attention</li>
-      <li><span class="diamond"></span> Deliverable</li>
-    </ul>
-    <p class="legend-title">Stream Colors</p>
-    <ul id="streamLegend"></ul>
+    <div class="legend-body">
+      <div class="legend-section">
+        <p class="legend-title">Stop Status</p>
+        <ul id="statusLegend"></ul>
+      </div>
+      <div class="legend-section">
+        <p class="legend-title">Stream Colors</p>
+        <ul id="streamLegend"></ul>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3838,6 +3963,9 @@ var DATA = ${dataJson};
 var LEGEND_STREAMS = ${legendJson};
 
 var STATUS_COLORS = {planned:"#ffffff",completed:"#92D050",ongoing:"#FFCD00",attention:"#ED8B00"};
+var DEFAULT_SC=[{key:"planned",label:"Planned Activity",color:"#ffffff"},{key:"completed",label:"Completed",color:"#92D050"},{key:"ongoing",label:"On-going",color:"#FFCD00"},{key:"attention",label:"Needs Attention",color:"#ED8B00"}];
+var statusCfg=Array.isArray(DATA.statusConfig)&&DATA.statusConfig.length?DATA.statusConfig:DEFAULT_SC;
+statusCfg.forEach(function(s){STATUS_COLORS[s.key]=s.color;});
 var DEFAULT_LABEL_MAX_WIDTH = 120;
 var DEFAULT_MONTH_WIDTH = 1500;
 var MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -4141,6 +4269,23 @@ function renderLabels(){
 }
 
 function renderLegend(){
+  // Status legend
+  var sLeg=document.getElementById("statusLegend");
+  if(sLeg){
+    sLeg.innerHTML="";
+    statusCfg.forEach(function(s){
+      var li=document.createElement("li");
+      var dot=document.createElement("span");
+      dot.className="dot";dot.style.background=s.color;
+      li.appendChild(dot);li.appendChild(document.createTextNode(" "+s.label));
+      sLeg.appendChild(li);
+    });
+    var dli=document.createElement("li");
+    var dd=document.createElement("span");dd.className="diamond";
+    dli.appendChild(dd);dli.appendChild(document.createTextNode(" Deliverable"));
+    sLeg.appendChild(dli);
+  }
+  // Stream legend
   streamLegendEl.innerHTML="";
   LEGEND_STREAMS.forEach(function(entry){
     var li=document.createElement("li");
@@ -4483,12 +4628,7 @@ function showCanvasContextMenu(event) {
       sep.className = "ctx-separator";
       canvasContextMenu.appendChild(sep);
 
-      const statuses = [
-        { key: "planned", label: "Planned", color: STATUS_COLORS.planned },
-        { key: "completed", label: "Completed", color: STATUS_COLORS.completed },
-        { key: "ongoing", label: "On-going", color: STATUS_COLORS.ongoing },
-        { key: "attention", label: "Needs Attention", color: STATUS_COLORS.attention },
-      ];
+      const statuses = getStatusConfig();
       statuses.forEach((s) => {
         const btn = document.createElement("button");
         btn.dataset.action = "set-status-" + s.key;
@@ -4685,6 +4825,19 @@ function initEvents() {
     document.getElementById("deliverableRadiusValue").textContent = deliverableRadius;
     render();
   });
+
+  // Legend layout toggle
+  document.getElementById("legendLayoutToggle").addEventListener("click", (event) => {
+    const btn = event.target.closest(".layout-btn");
+    if (!btn) return;
+    const layout = btn.dataset.layout;
+    if (layout === legendLayout) return;
+    legendLayout = layout;
+    applyLegendLayout();
+    document.querySelectorAll("#legendLayoutToggle .layout-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+
   deleteSelectedBtn.addEventListener("click", removeSelected);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Delete" && !event.target.closest("input, select, textarea")) {
@@ -5094,6 +5247,10 @@ function init() {
   syncStreamPresetDropdown();
   applyStreamPreset();
   updateUndoRedoButtons();
+  applyStatusCssVars();
+  renderStatusConfigEditor();
+  applyLegendLayout();
+  syncLegendLayoutToggle();
   renderSelectionEditor();
   render();
   fitToView();

@@ -73,7 +73,18 @@
         </section>
 
         <section class="panel-group">
+          <h2>Stop Status</h2>
+          <div id="statusConfigEditor" class="status-config-editor"></div>
+        </section>
+
+        <section class="panel-group">
           <h2>Display</h2>
+          <label class="toggle-label">Legend Layout
+            <div class="legend-layout-toggle" id="legendLayoutToggle">
+              <button class="layout-btn active" data-layout="vertical" title="Vertical (stacked)">&#x25A4; Vertical</button>
+              <button class="layout-btn" data-layout="horizontal" title="Horizontal (side by side)">&#x25A5; Horizontal</button>
+            </div>
+          </label>
           <label class="range-label">Label Font Size <span id="labelFontSizeValue">14px</span>
             <input id="labelFontSize" type="range" min="8" max="28" step="1" value="14" />
           </label>
@@ -178,18 +189,18 @@
             </g>
           </svg>
 
-          <div class="legend-card">
+          <div class="legend-card" id="legendCard">
             <h3>Legend</h3>
-            <p class="legend-title">Stop Status</p>
-            <ul>
-              <li><span class="dot planned"></span> Planned Activity</li>
-              <li><span class="dot completed"></span> Completed</li>
-              <li><span class="dot ongoing"></span> On-going</li>
-              <li><span class="dot attention"></span> Needs Attention</li>
-              <li><span class="diamond"></span> Deliverable</li>
-            </ul>
-            <p class="legend-title">Stream Colors</p>
-            <ul id="streamLegend"></ul>
+            <div class="legend-body">
+              <div class="legend-section">
+                <p class="legend-title">Stop Status</p>
+                <ul id="statusLegend"></ul>
+              </div>
+              <div class="legend-section">
+                <p class="legend-title">Stream Colors</p>
+                <ul id="streamLegend"></ul>
+              </div>
+            </div>
           </div>
         </div>
       </main>

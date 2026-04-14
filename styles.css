@@ -233,14 +233,23 @@ body {
 .range-label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 0.85rem;
+  gap: 2px;
+  font-size: 0.82rem;
   color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.range-label span {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin-left: 4px;
 }
 
 .range-label input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
+  margin-top: 0;
 }
 
 .toolbar-grid {
@@ -668,6 +677,42 @@ button:disabled {
   padding: 12px;
 }
 
+.legend-card.legend-horizontal {
+  width: auto;
+}
+
+.legend-card.legend-horizontal .legend-body {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.legend-card.legend-horizontal .legend-section {
+  min-width: 0;
+}
+
+/* Legend layout toggle */
+.toggle-label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+  color: var(--label-color);
+}
+
+.legend-layout-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.layout-btn {
+  font-size: 0.78rem !important;
+  padding: 6px 8px !important;
+  border-radius: 8px !important;
+  text-align: center;
+}
+
 .legend-card h3 {
   margin: 0 0 9px;
   font-size: 0.95rem;
@@ -755,6 +800,53 @@ button:disabled {
   transform: rotate(45deg);
   border: 2px solid #53565A;
   background: rgba(83, 86, 90, 0.2);
+}
+
+/* Status Config Editor */
+.status-config-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.status-config-row {
+  display: grid;
+  gap: 6px;
+}
+
+.status-config-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-config-row input[type="color"] {
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid var(--btn-hover-border);
+  cursor: pointer;
+  flex-shrink: 0;
+  background: none;
+}
+
+.status-config-hex {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--text-strong);
+  letter-spacing: 0.5px;
+}
+
+.status-config-row input[type="text"] {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text-strong);
+  font-family: inherit;
+  font-size: 0.82rem;
 }
 
 .selection-editor {
