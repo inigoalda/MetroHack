@@ -51,6 +51,8 @@ const loadMapFileInput = document.getElementById("loadMapFile");
 const GRID_SIZE = 20;
 let snapEnabled = true;
 let labelFontSize = 14;
+let activityRadius = 12;
+let deliverableRadius = 11;
 
 const STATUS_COLORS = {
   planned: "#ffffff",
@@ -1091,10 +1093,10 @@ function renderPreview() {
 
     if (state.tool === "add-deliverable") {
       const diamond = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      diamond.setAttribute("x", previewPoint.x - 11);
-      diamond.setAttribute("y", previewPoint.y - 11);
-      diamond.setAttribute("width", 22);
-      diamond.setAttribute("height", 22);
+      diamond.setAttribute("x", previewPoint.x - deliverableRadius);
+      diamond.setAttribute("y", previewPoint.y - deliverableRadius);
+      diamond.setAttribute("width", deliverableRadius * 2);
+      diamond.setAttribute("height", deliverableRadius * 2);
       diamond.setAttribute("transform", `rotate(45 ${previewPoint.x} ${previewPoint.y})`);
       diamond.classList.add("preview-node");
       previewLayer.appendChild(diamond);
@@ -1104,7 +1106,7 @@ function renderPreview() {
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circle.setAttribute("cx", previewPoint.x);
     circle.setAttribute("cy", previewPoint.y);
-    circle.setAttribute("r", 12);
+    circle.setAttribute("r", activityRadius);
     circle.classList.add("preview-node");
     previewLayer.appendChild(circle);
   }
@@ -1269,7 +1271,7 @@ function renderNodes() {
       const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       circle.setAttribute("cx", node.x);
       circle.setAttribute("cy", node.y);
-      circle.setAttribute("r", 12);
+      circle.setAttribute("r", activityRadius);
       circle.setAttribute("fill", fill);
       circle.classList.add("node");
       if (isItemSelected("node", node.id)) {
@@ -1278,10 +1280,10 @@ function renderNodes() {
       g.appendChild(circle);
     } else {
       const diamond = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      diamond.setAttribute("x", node.x - 11);
-      diamond.setAttribute("y", node.y - 11);
-      diamond.setAttribute("width", 22);
-      diamond.setAttribute("height", 22);
+      diamond.setAttribute("x", node.x - deliverableRadius);
+      diamond.setAttribute("y", node.y - deliverableRadius);
+      diamond.setAttribute("width", deliverableRadius * 2);
+      diamond.setAttribute("height", deliverableRadius * 2);
       diamond.setAttribute("fill", fill);
       diamond.setAttribute("transform", `rotate(45 ${node.x} ${node.y})`);
       diamond.setAttribute("stroke", "#53565A");
@@ -1348,6 +1350,9 @@ function renderLabels() {
     const rawSubs = node.subLabels || [];
     const subObjs = rawSubs.map((s) => typeof s === "string" ? { text: s, rightText: "" } : s);
     const isDeliv = node.type === "deliverable";
+    const nodeOffset = isDeliv
+      ? Math.ceil(deliverableRadius * Math.SQRT2) + 6
+      : activityRadius + 10;
     const pos = node.labelPosition || (isDeliv ? "down" : "down");
     const allLabels = [
       { text: node.label, rightText: node.labelDescription || "", textColor: mainStyle.textColor, bgColor: mainStyle.bgColor, descPosition: node.labelDescPosition || "right" },
@@ -1369,17 +1374,17 @@ function renderLabels() {
       anchorX = node.x - mw / 2;
     } else if (pos === "left") {
       textAlign = "right";
-      anchorX = node.x - 22;
+      anchorX = node.x - nodeOffset;
       curY = node.y - fs * 0.7;
     } else if (pos === "right") {
       textAlign = "left";
-      anchorX = node.x + 22;
+      anchorX = node.x + nodeOffset;
       curY = node.y - fs * 0.7;
     } else {
       // "down" (default)
       textAlign = "center";
       anchorX = node.x - mw / 2;
-      curY = node.y + 22;
+      curY = node.y + nodeOffset;
     }
 
     const labelEntries = [];
@@ -1405,7 +1410,7 @@ function renderLabels() {
         measured.push({ fo, h: actualH, entry });
       });
       // Stack from bottom (just above node) going up
-      let bottomY = node.y - 22;
+      let bottomY = node.y - nodeOffset;
       for (let i = measured.length - 1; i >= 0; i--) {
         const m = measured[i];
         const y = bottomY - m.h;
@@ -1440,7 +1445,7 @@ function renderLabels() {
 
       // For deliverables with stacked labels, remaining labels still go downward
       if (isDeliv && allLabels.length > 1) {
-        let stackY = node.y + 22;
+        let stackY = node.y + nodeOffset;
         for (let i = 1; i < allLabels.length; i++) {
           const entry = allLabels[i];
           const sfo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
@@ -1463,7 +1468,7 @@ function renderLabels() {
       }
     } else {
       // "down" (default) — original stacking behavior
-      curY = node.y + 22;
+      curY = node.y + nodeOffset;
       allLabels.forEach((entry) => {
         const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
         fo.setAttribute("x", node.x - mw / 2);
@@ -3166,6 +3171,8 @@ function saveMap() {
     textLabels: cloneData(state.textLabels),
     calendar: cloneData(state.calendar),
     labelFontSize: labelFontSize,
+    activityRadius: activityRadius,
+    deliverableRadius: deliverableRadius,
   };
   downloadBlob(
     new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
@@ -3196,6 +3203,12 @@ function loadMap(file) {
       labelFontSize = typeof data.labelFontSize === "number" ? data.labelFontSize : 14;
       document.getElementById("labelFontSize").value = labelFontSize;
       document.getElementById("labelFontSizeValue").textContent = labelFontSize + "px";
+      activityRadius = typeof data.activityRadius === "number" ? data.activityRadius : 12;
+      document.getElementById("activityRadius").value = activityRadius;
+      document.getElementById("activityRadiusValue").textContent = activityRadius;
+      deliverableRadius = typeof data.deliverableRadius === "number" ? data.deliverableRadius : 11;
+      document.getElementById("deliverableRadius").value = deliverableRadius;
+      document.getElementById("deliverableRadiusValue").textContent = deliverableRadius;
       clearSelection();
       render();
       syncStreamPresetDropdown();
@@ -3231,9 +3244,12 @@ function getContentBounds() {
     const labelCount = 1 + subs.length;
     const estLineH = labelFontSize * 1.4;
     const labelGap = 8;
-    // Each label: text height (~estLineH) + 6px spacing + gap; starts 22px below node
+    // Each label: text height (~estLineH) + 6px spacing + gap; starts nodeOffset below node
+    const nodeOffset = n.type === "deliverable"
+      ? Math.ceil(deliverableRadius * Math.SQRT2) + 6
+      : activityRadius + 10;
     // For wrapped text, estimate ~2 lines per label as conservative bound
-    const estLabelH = 22 + labelCount * (estLineH * 2 + 6 + labelGap);
+    const estLabelH = nodeOffset + labelCount * (estLineH * 2 + 6 + labelGap);
     points.push({ x: n.x, y: n.y + estLabelH });
   });
   state.textLabels.forEach((tl) => {
@@ -3629,6 +3645,8 @@ function exportViewer() {
     textLabels: cloneData(state.textLabels),
     calendar: cloneData(state.calendar),
     labelFontSize: labelFontSize,
+    activityRadius: activityRadius,
+    deliverableRadius: deliverableRadius,
   };
 
   const orderedGroups = getOrderedStreamGroups();
@@ -3835,6 +3853,8 @@ var connectionsLayer = document.getElementById("connectionsLayer");
 var streamLegendEl = document.getElementById("streamLegend");
 
 var labelFontSize = DATA.labelFontSize || 14;
+var activityRadius = typeof DATA.activityRadius === "number" ? DATA.activityRadius : 12;
+var deliverableRadius = typeof DATA.deliverableRadius === "number" ? DATA.deliverableRadius : 11;
 var calendar = DATA.calendar || {monthWidths:{},refYear:new Date().getFullYear()};
 
 /* ── Transform state ──────────────────────────────── */
@@ -3978,12 +3998,12 @@ function renderNodes(){
     var fill=STATUS_COLORS[node.status]||STATUS_COLORS.planned;
     if(node.type==="activity"){
       var c=document.createElementNS("http://www.w3.org/2000/svg","circle");
-      c.setAttribute("cx",node.x);c.setAttribute("cy",node.y);c.setAttribute("r",12);
+      c.setAttribute("cx",node.x);c.setAttribute("cy",node.y);c.setAttribute("r",activityRadius);
       c.setAttribute("fill",fill);c.classList.add("node");g.appendChild(c);
     }else{
       var d=document.createElementNS("http://www.w3.org/2000/svg","rect");
-      d.setAttribute("x",node.x-11);d.setAttribute("y",node.y-11);
-      d.setAttribute("width",22);d.setAttribute("height",22);
+      d.setAttribute("x",node.x-deliverableRadius);d.setAttribute("y",node.y-deliverableRadius);
+      d.setAttribute("width",deliverableRadius*2);d.setAttribute("height",deliverableRadius*2);
       d.setAttribute("fill",fill);
       d.setAttribute("transform","rotate(45 "+node.x+" "+node.y+")");
       d.setAttribute("stroke","#53565A");d.setAttribute("stroke-width","3");
@@ -4012,6 +4032,7 @@ function renderLabels(){
     var rawSubs=node.subLabels||[];
     var subObjs=rawSubs.map(function(s){return typeof s==="string"?{text:s,rightText:""}:s;});
     var isDeliv=node.type==="deliverable";
+    var nodeOffset=isDeliv?Math.ceil(deliverableRadius*Math.SQRT2)+6:activityRadius+10;
     var pos=node.labelPosition||(isDeliv?"down":"down");
     var allLabels=[{text:node.label,rightText:node.labelDescription||"",textColor:mainStyle.textColor,bgColor:mainStyle.bgColor,descPosition:node.labelDescPosition||"right"}].concat(subObjs.map(function(s){
       return{text:s.text,rightText:s.rightText||"",textColor:s.textColor||mainStyle.textColor,bgColor:s.bgColor!==undefined?s.bgColor:mainStyle.bgColor,descPosition:s.descPosition||"right"};
@@ -4028,7 +4049,7 @@ function renderLabels(){
         var actualH=div.offsetHeight||fs*1.4;fo.setAttribute("height",actualH+4);
         measured.push({fo:fo,h:actualH,entry:entry});
       });
-      var bottomY=node.y-22;
+      var bottomY=node.y-nodeOffset;
       for(var i=measured.length-1;i>=0;i--){
         var m=measured[i];var y=bottomY-m.h;m.fo.setAttribute("y",y);
         entries.push({fo:m.fo,y:y,h:m.h,rightText:m.entry.rightText,bgColor:m.entry.bgColor,descPosition:m.entry.descPosition});
@@ -4037,7 +4058,7 @@ function renderLabels(){
     }else if(pos==="left"||pos==="right"){
       var tAlign=pos==="left"?"right":"left";
       var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
-      var aX=pos==="left"?node.x-22-mw:node.x+22;
+      var aX=pos==="left"?node.x-nodeOffset-mw:node.x+nodeOffset;
       fo.setAttribute("x",aX);fo.setAttribute("y",0);fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
       var div=document.createElement("div");div.className="label-wrap"+(isDeliv?" label-deliverable":"");
       div.style.cssText="color:"+allLabels[0].textColor+";font-size:"+fs+"px;max-width:"+mw+"px;text-align:"+tAlign+";";
@@ -4047,7 +4068,7 @@ function renderLabels(){
       fo.setAttribute("y",centeredY);
       entries.push({fo:fo,y:centeredY,h:actualH,rightText:allLabels[0].rightText,bgColor:allLabels[0].bgColor,descPosition:allLabels[0].descPosition});
       if(isDeliv&&allLabels.length>1){
-        var stackY=node.y+22;
+        var stackY=node.y+nodeOffset;
         for(var i=1;i<allLabels.length;i++){
           var entry=allLabels[i];
           var sfo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
@@ -4061,7 +4082,7 @@ function renderLabels(){
         }
       }
     }else{
-      var curY=node.y+22;
+      var curY=node.y+nodeOffset;
       allLabels.forEach(function(entry){
         var fo=document.createElementNS("http://www.w3.org/2000/svg","foreignObject");
         fo.setAttribute("x",node.x-mw/2);fo.setAttribute("y",curY);fo.setAttribute("width",mw);fo.setAttribute("height",200);fo.setAttribute("class","label-fo");
@@ -4275,7 +4296,8 @@ function getContentBounds(){
     var subs=n.subLabels||[];
     var labelCount=1+subs.length;
     var estLineH=labelFontSize*1.4;
-    var estLabelH=22+labelCount*(estLineH*2+6+8);
+    var nOff=n.type==="deliverable"?Math.ceil(deliverableRadius*Math.SQRT2)+6:activityRadius+10;
+    var estLabelH=nOff+labelCount*(estLineH*2+6+8);
     pts.push({x:n.x,y:n.y+estLabelH});
   });
   DATA.textLabels.forEach(function(tl){
@@ -4651,6 +4673,16 @@ function initEvents() {
   document.getElementById("labelFontSize").addEventListener("input", (event) => {
     labelFontSize = Number(event.target.value);
     document.getElementById("labelFontSizeValue").textContent = labelFontSize + "px";
+    render();
+  });
+  document.getElementById("activityRadius").addEventListener("input", (event) => {
+    activityRadius = Number(event.target.value);
+    document.getElementById("activityRadiusValue").textContent = activityRadius;
+    render();
+  });
+  document.getElementById("deliverableRadius").addEventListener("input", (event) => {
+    deliverableRadius = Number(event.target.value);
+    document.getElementById("deliverableRadiusValue").textContent = deliverableRadius;
     render();
   });
   deleteSelectedBtn.addEventListener("click", removeSelected);
