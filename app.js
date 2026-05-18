@@ -3357,29 +3357,49 @@ function getContentBounds() {
   state.streams.forEach((s) => s.points.forEach((p) => points.push(p)));
   state.nodes.forEach((n) => {
     points.push({ x: n.x, y: n.y });
-    // Account for label width
     const mw = n.labelMaxWidth || DEFAULT_LABEL_MAX_WIDTH;
-    points.push({ x: n.x + mw / 2, y: n.y });
-    points.push({ x: n.x - mw / 2, y: n.y });
-    // Account for right-side description text
-    const desc = n.labelDescription || "";
     const subs = (n.subLabels || []);
-    const hasRightText = desc || subs.some((s) => (typeof s === "string" ? "" : (s.rightText || "")));
-    if (hasRightText) {
-      // Estimate description text width: ~7px per character at default font size
-      const allTexts = [desc, ...subs.map((s) => typeof s === "string" ? "" : (s.rightText || ""))].filter(Boolean);
-      const longestLen = Math.max(...allTexts.map((t) => t.length), 0);
-      const estWidth = longestLen * (labelFontSize * 0.6);
-      points.push({ x: n.x + mw / 2 + 10 + estWidth, y: n.y });
-    }
+    const nodeOffset = n.type === "deliverable"
+      ? Math.ceil(deliverableRadius * Math.SQRT2) + 6
+      : activityRadius + 10;
+    const labelPos = n.labelPosition || "down";
+    const labelBounds = [
+      {
+        rightText: n.labelDescription || "",
+        descPosition: n.labelDescPosition || "right",
+      },
+      ...subs.map((s) => (
+        typeof s === "string"
+          ? { rightText: "", descPosition: "right" }
+          : { rightText: s.rightText || "", descPosition: s.descPosition || "right" }
+      )),
+    ];
+
+    labelBounds.forEach((label, idx) => {
+      let labelX = n.x - mw / 2;
+      if (idx === 0 && labelPos === "left") {
+        labelX = n.x - nodeOffset - mw;
+      } else if (idx === 0 && labelPos === "right") {
+        labelX = n.x + nodeOffset;
+      }
+
+      points.push({ x: labelX, y: n.y });
+      points.push({ x: labelX + mw, y: n.y });
+
+      if (label.rightText) {
+        const estWidth = label.rightText.length * (labelFontSize * 0.6);
+        if (label.descPosition === "left") {
+          points.push({ x: labelX - 10 - estWidth, y: n.y });
+        } else {
+          points.push({ x: labelX + mw + 10 + estWidth, y: n.y });
+        }
+      }
+    });
     // Account for vertical extent of stacked labels below the node
     const labelCount = 1 + subs.length;
     const estLineH = labelFontSize * 1.4;
     const labelGap = 8;
     // Each label: text height (~estLineH) + 6px spacing + gap; starts nodeOffset below node
-    const nodeOffset = n.type === "deliverable"
-      ? Math.ceil(deliverableRadius * Math.SQRT2) + 6
-      : activityRadius + 10;
     // For wrapped text, estimate ~2 lines per label as conservative bound
     const estLabelH = nodeOffset + labelCount * (estLineH * 2 + 6 + labelGap);
     points.push({ x: n.x, y: n.y + estLabelH });
@@ -3465,7 +3485,7 @@ function buildExportSvgString() {
     // Compute x position based on alignment
     let anchorX;
     let textAnchor;
-    if (textAlign === "left" || isRightText) {
+    if (textAlign === "left") {
       anchorX = foX;
       textAnchor = "start";
     } else if (textAlign === "right") {
